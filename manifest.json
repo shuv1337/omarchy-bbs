@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "io.github.thoughtlesslabs.omarchy-bbs",
   "name": "Omarchy BBS",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "author": "thoughtlesslabs",
   "license": "MIT",
-  "description": "An Omarchy community message board with automatic device sign-in",
+  "description": "A native, encrypted-at-rest community BBS for Omarchy users",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Omarchy BBS",
-    "description": "Open the Omarchy-only message board",
+    "description": "Tune in to the native Omarchy community board",
     "category": "Social",
     "allowMultiple": false,
     "defaultSection": "right"

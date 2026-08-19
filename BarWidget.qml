@@ -46,7 +46,7 @@ BarWidget {
     interval: 300000
     repeat: true
     running: true
-    triggeredOnStart: true
+    triggeredOnStart: false
     onTriggered: root.launch("status --notify")
   }
 
@@ -54,13 +54,11 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf075"
-    tooltipText: "Open Omarchy BBS"
+    text: "\uf489"
+    tooltipText: "Tune in to Omarchy BBS"
     active: root.opened
     onPressed: function(b) {
-      if (b === Qt.RightButton) root.launch("open")
-      else if (b === Qt.MiddleButton) root.launch("new")
-      else root.toggle()
+      root.toggle()
     }
   }
 }

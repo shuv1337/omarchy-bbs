@@ -63,6 +63,40 @@ function registerDevice(): never {
   try{$pdo->beginTransaction();$pdo->prepare('INSERT INTO users(handle) VALUES(?)')->execute([$handle]);$uid=(int)$pdo->lastInsertId();$pdo->prepare('INSERT INTO devices(id,user_id,secret_enc,omarchy_version) VALUES(?,?,?,?)')->execute([$device,$uid,seal($secret),$version]);$pdo->prepare('INSERT INTO registrations(ip_hash) VALUES(?)')->execute([$ip]);$pdo->commit();}catch(PDOException $x){if($pdo->inTransaction())$pdo->rollBack();if((string)$x->getCode()==='23000')j(409,['error'=>'Identity already exists']);throw $x;}
   j(201,['device_id'=>$device,'handle'=>$handle]);
 }
+function apiInput(): array {
+  $in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))j(400,['error'=>'Invalid JSON']);return $in;
+}
+function apiDevice(array $in,string $purpose,bool $consumeNonce=true): array {
+  $d=(string)($in['device']??'');$ts=(string)($in['ts']??'');$n=(string)($in['nonce']??'');$sig=(string)($in['sig']??'');
+  if(!ctype_digit($ts)||abs(time()-(int)$ts)>LOGIN_WINDOW||!preg_match('/^[A-Za-z0-9_-]{8,64}$/',$n))j(401,['error'=>'Expired device proof']);
+  $q=db()->prepare('SELECT d.user_id,d.secret_enc,COALESCE(d.last_seen_at,d.created_at) seen,u.handle FROM devices d JOIN users u ON u.id=d.user_id WHERE d.id=?');$q->execute([$d]);$row=$q->fetch();
+  $secret=$row?hex2bin(unseal($row['secret_enc'])):false;$expected=$secret?hash_hmac('sha256',"$d.$ts.$n.$purpose",$secret):'';
+  if(!$row||!hash_equals($expected,$sig))j(401,['error'=>'Invalid device proof']);
+  if($consumeNonce){try{db()->prepare('INSERT INTO login_nonces(nonce_hash,expires_at) VALUES(?,DATE_ADD(NOW(),INTERVAL 2 MINUTE))')->execute([hash('sha256',$n)]);}catch(PDOException){j(401,['error'=>'Device proof already used']);}}
+  $row['device_id']=$d;return $row;
+}
+function apiThreads(): never {
+  $in=apiInput();$u=apiDevice($in,'threads');
+  $rows=db()->query('SELECT t.id,t.title_enc,t.created_at,u.handle,COUNT(r.id) replies FROM threads t JOIN users u ON u.id=t.user_id LEFT JOIN replies r ON r.thread_id=t.id GROUP BY t.id ORDER BY t.id DESC LIMIT 50')->fetchAll();
+  $threads=[];foreach($rows as $r)$threads[]=['id'=>(int)$r['id'],'title'=>unseal($r['title_enc']),'handle'=>$r['handle'],'created_at'=>$r['created_at'].' UTC','replies'=>(int)$r['replies']];
+  db()->prepare('UPDATE devices SET last_seen_at=NOW() WHERE id=?')->execute([$u['device_id']]);j(200,['ok'=>true,'handle'=>$u['handle'],'threads'=>$threads]);
+}
+function apiThread(): never {
+  $in=apiInput();$id=(int)($in['thread_id']??0);apiDevice($in,'thread:'.$id);
+  $q=db()->prepare('SELECT t.id,t.title_enc,t.body_enc,t.created_at,u.handle FROM threads t JOIN users u ON u.id=t.user_id WHERE t.id=?');$q->execute([$id]);$t=$q->fetch();if(!$t)j(404,['error'=>'Transmission not found']);
+  $q=db()->prepare('SELECT r.id,r.body_enc,r.created_at,u.handle FROM replies r JOIN users u ON u.id=r.user_id WHERE r.thread_id=? ORDER BY r.id');$q->execute([$id]);$replies=[];foreach($q as $r)$replies[]=['id'=>(int)$r['id'],'body'=>unseal($r['body_enc']),'handle'=>$r['handle'],'created_at'=>$r['created_at'].' UTC'];
+  j(200,['ok'=>true,'thread'=>['id'=>(int)$t['id'],'title'=>unseal($t['title_enc']),'body'=>unseal($t['body_enc']),'handle'=>$t['handle'],'created_at'=>$t['created_at'].' UTC','replies'=>$replies]]);
+}
+function apiCreate(): never {
+  $in=apiInput();$title=trim((string)($in['title']??''));$body=trim((string)($in['body']??''));$digest=hash('sha256',$title."\0".$body);$u=apiDevice($in,'create:'.$digest);
+  if($title===''||$body==='')j(400,['error'=>'Title and message are required']);if(mb_strlen($title)>120||mb_strlen($body)>8000)j(400,['error'=>'Transmission is too long']);throttle((int)$u['user_id'],'thread',10);
+  $q=db()->prepare('INSERT INTO threads(user_id,title_enc,body_enc) VALUES(?,?,?)');$q->execute([$u['user_id'],seal($title),seal($body)]);j(201,['ok'=>true,'thread_id'=>(int)db()->lastInsertId()]);
+}
+function apiReply(): never {
+  $in=apiInput();$id=(int)($in['thread_id']??0);$body=trim((string)($in['body']??''));$u=apiDevice($in,'reply:'.$id.':'.hash('sha256',$body));
+  if($id<1||$body==='')j(400,['error'=>'Reply is required']);if(mb_strlen($body)>8000)j(400,['error'=>'Reply is too long']);$q=db()->prepare('SELECT 1 FROM threads WHERE id=?');$q->execute([$id]);if(!$q->fetchColumn())j(404,['error'=>'Transmission not found']);throttle((int)$u['user_id'],'reply',30);
+  db()->prepare('INSERT INTO replies(thread_id,user_id,body_enc) VALUES(?,?,?)')->execute([$id,$u['user_id'],seal($body)]);j(201,['ok'=>true]);
+}
 function authenticate(): never {
   $d=(string)($_GET['device']??'');$ts=(string)($_GET['ts']??'');$n=(string)($_GET['nonce']??'');$sig=(string)($_GET['sig']??'');$next=(string)($_GET['next']??'/');$themeToken=(string)($_GET['theme']??'');
   if(!in_array($next,['/','/new'],true)||!preg_match('/^[A-Za-z0-9_-]{20,600}$/',$themeToken)){http_response_code(400);exit('Invalid destination or theme.');}
@@ -73,10 +107,7 @@ function authenticate(): never {
   $token=rtrim(strtr(base64_encode(random_bytes(48)),'+/','-_'),'=');$csrf=bin2hex(random_bytes(32));db()->prepare('INSERT INTO sessions(token_hash,user_id,csrf_token,theme_json,expires_at) VALUES(?,?,?,?,DATE_ADD(NOW(),INTERVAL 30 DAY))')->execute([hash('sha256',$token),$row['user_id'],$csrf,json_encode($theme)]);db()->prepare('UPDATE devices SET last_seen_at=NOW() WHERE id=?')->execute([$d]);setcookie('bbs_session',$token,['expires'=>time()+SESSION_TTL,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);go($next);
 }
 function status(): never {
-  $in=json_decode(file_get_contents('php://input'),true);if(!is_array($in))j(400,['error'=>'Invalid JSON']);
-  $d=(string)($in['device']??'');$ts=(string)($in['ts']??'');$n=(string)($in['nonce']??'');$sig=(string)($in['sig']??'');
-  if(!ctype_digit($ts)||abs(time()-(int)$ts)>LOGIN_WINDOW||!preg_match('/^[A-Za-z0-9_-]{8,64}$/',$n))j(401,['error'=>'Expired status proof']);
-  $q=db()->prepare('SELECT user_id,secret_enc,COALESCE(last_seen_at,created_at) seen FROM devices WHERE id=?');$q->execute([$d]);$row=$q->fetch();$secret=$row?hex2bin(unseal($row['secret_enc'])):false;$expected=$secret?hash_hmac('sha256',"$d.$ts.$n.status",$secret):'';if(!$row||!hash_equals($expected,$sig))j(401,['error'=>'Invalid device proof']);
+  $in=apiInput();$row=apiDevice($in,'status');
   $q=db()->prepare('SELECT (SELECT COUNT(*) FROM threads WHERE created_at>? AND user_id<>?)+(SELECT COUNT(*) FROM replies WHERE created_at>? AND user_id<>?)');$q->execute([$row['seen'],$row['user_id'],$row['seen'],$row['user_id']]);j(200,['unread'=>(int)$q->fetchColumn()]);
 }
 
@@ -87,6 +118,10 @@ $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)?:'/';$method=$_SERVER['REQ
 if($path==='/health')j(200,['ok'=>true,'service'=>'omarchy-bbs']);
 if($path==='/api/register'&&$method==='POST')registerDevice();
 if($path==='/api/status'&&$method==='POST')status();
+if($path==='/api/threads'&&$method==='POST')apiThreads();
+if($path==='/api/thread'&&$method==='POST')apiThread();
+if($path==='/api/create'&&$method==='POST')apiCreate();
+if($path==='/api/reply'&&$method==='POST')apiReply();
 if($path==='/auth'&&$method==='GET')authenticate();
 $u=mustUser();
 if($path==='/logout'){$token=$_COOKIE['bbs_session']??'';if($token)db()->prepare('DELETE FROM sessions WHERE token_hash=?')->execute([hash('sha256',$token)]);setcookie('bbs_session','',['expires'=>1,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);go('/');}

@@ -1,30 +1,30 @@
 # Omarchy BBS
 
-A small community message board whose normal entrance is an Omarchy machine.
-It includes an Omarchy 4 bar widget, an automatic device client, and a PHP/MySQL
-web application.
+A native community message board whose normal entrance is an Omarchy machine.
+It includes an Omarchy 4 bar widget, a signed device client, and a PHP/MySQL
+service. Reading, writing, and joining all happen in the themed shell panel—no
+browser tab is opened.
 
 ## Requirements and boundaries
 
 - Omarchy Quattro (4.x) with its Quickshell-based plugin runtime
 - Python 3 on the Omarchy client
-- A graphical browser registered with the desktop
 - The hosted BBS at `https://bbs.thoughtlesslabs.com`
 
 The plugin never installs packages, requests elevated privileges, or starts a
-background service. When enabled, the widget verifies Omarchy locally, creates
-a device credential, registers it, and then checks for new activity every five
-minutes. The credential is stored with mode `0600` under
-`$XDG_STATE_HOME/omarchy-bbs`. No invite or setup command is required. Clicking
-the bar icon opens the authenticated board. Notifications never include message
-content; clicking one opens the board.
+background service. On first open, it verifies Omarchy locally and suggests the
+machine hostname as an editable public call sign. Registration happens only
+after the user confirms that name. The generated device credential is stored
+with mode `0600` under `$XDG_STATE_HOME/omarchy-bbs`. After joining, the widget
+checks for new activity every five minutes. Notifications never include message
+content; clicking one opens the native panel.
 
 ## Security model
 
 The server accepts registered devices, and the client refuses to register or
-log in unless `/usr/share/omarchy` exists and `omarchy version` succeeds. Each
-click creates a signed, single-use login URL that expires after 90 seconds; the
-browser receives a Secure, HttpOnly, SameSite session cookie.
+make signed requests unless `/usr/share/omarchy` exists and `omarchy version`
+succeeds. Every API request is authenticated with a short-lived, single-use
+HMAC proof; write signatures are bound to the exact message contents.
 
 Omarchy is open source, so no software-only OS check can be unforgeable. An
 attacker can imitate the client. This is a practical community boundary, not
@@ -32,10 +32,11 @@ hardware attestation. The production PHP app encrypts message titles, bodies,
 and device secrets at rest using authenticated libsodium encryption with a key
 stored outside both the database and document root. It also adds registration
 throttling, CSRF protection, strict browser security headers, HTTPS-only
-cookies, and durable sessions and one-time nonces. Handles are random
-pseudonyms and contain no local account name.
+headers, rate limits, strict size limits, and durable one-time nonces. Handles
+are public and default to the hostname only after the user sees and confirms it.
 
-Click the installed `BBS` bar widget. Registration and sign-in are automatic.
+Click the installed terminal-signal bar icon. Pick or confirm the suggested
+call sign, then select **Join frequency**. No terminal commands are required.
 For development against another server, create `~/.config/omarchy-bbs/config.json`:
 
 ```json
@@ -53,7 +54,8 @@ omarchy plugin add https://github.com/thoughtlesslabs/omarchy-bbs.git --enable
 ```
 
 For local development, validate it and add it from the local Git checkout.
-The `BBS` bar button runs `client.py open`.
+The widget talks to `client.py` directly and passes message bodies over stdin so
+they do not appear in process arguments.
 
 Move the widget if desired:
 
