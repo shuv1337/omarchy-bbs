@@ -144,13 +144,13 @@ Panel {
           width: parent.width
           title: "OMARCHY // BBS"
           meta: root.handle ? "@" + root.handle : "LOCAL FREQUENCY"
-          detail: root.screen === "onboarding" ? "TUNE IN" : "ENCRYPTED AT REST"
+          detail: root.screen === "onboarding" ? "TUNE IN" : "ENCRYPTED"
           foreground: root.foreground
           fontFamily: root.panelFont
           iconComponent: Component {
             Item {
               implicitWidth: Style.space(42); implicitHeight: Style.space(42)
-              Text { anchors.centerIn: parent; text: "\uf489"; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.display }
+              Text { anchors.centerIn: parent; text: "\uf7c0"; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.display }
               Rectangle { width: Style.space(6); height: width; radius: width / 2; color: root.accent; anchors.right: parent.right; anchors.bottom: parent.bottom }
             }
           }
@@ -188,7 +188,7 @@ Panel {
           visible: root.screen === "threads"
           width: parent.width; spacing: Style.space(7)
           Row { width: parent.width; spacing: Style.space(7)
-            Button { width: (parent.width - parent.spacing) * .62; text: "New transmission"; iconText: "\uf4ad"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.screen = "compose" }
+            Button { width: (parent.width - parent.spacing) * .62; text: "New transmission"; iconText: "\uf1d8"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.screen = "compose" }
             Button { width: (parent.width - parent.spacing) * .38; text: "Refresh"; iconText: "\uf021"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
           }
           Text { visible: threadModel.count === 0; width: parent.width; text: "NO TRANSMISSIONS YET — YOU HAVE THE CHANNEL."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
