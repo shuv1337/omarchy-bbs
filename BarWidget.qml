@@ -50,6 +50,15 @@ BarWidget {
     onTriggered: root.launch("status --notify")
   }
 
+  IpcHandler {
+    target: "omarchy.bbs"
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function show(): void { root.open() }
+    function hide(): void { root.close() }
+    function toggle(): void { root.toggle() }
+  }
+
   BarIconButton {
     id: button
     anchors.fill: parent

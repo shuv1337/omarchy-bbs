@@ -8,8 +8,7 @@ import qs.Ui
 Panel {
   id: root
   moduleName: "io.github.thoughtlesslabs.omarchy-bbs"
-  manageIpc: true
-  ipcTarget: "omarchy.bbs"
+  manageIpc: false
 
   property var anchorItem: null
   property var hostWidget: null
