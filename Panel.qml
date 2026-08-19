@@ -146,7 +146,7 @@ Panel {
           visible: root.errorMessage !== ""
           width: parent.width
           text: "! " + root.errorMessage
-          color: Color.error
+          color: root.accent
           font.family: root.panelFont
           font.pixelSize: Style.font.bodySmall
           wrapMode: Text.WordWrap

@@ -53,6 +53,7 @@ BarWidget {
 
   IpcHandler {
     target: "omarchy.bbs"
+    function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath}) }
     function open(): void { root.open() }
     function close(): void { root.close() }
     function show(): void { root.open() }
