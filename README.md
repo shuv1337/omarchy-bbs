@@ -12,10 +12,12 @@ web application.
 - The hosted BBS at `https://bbs.thoughtlesslabs.com`
 
 The plugin never installs packages, requests elevated privileges, or starts a
-background service. Its bar button only runs the bundled client. On first click
-the client verifies Omarchy locally, creates a device credential, registers it,
-and opens the board. The credential is stored with mode `0600` under
-`$XDG_STATE_HOME/omarchy-bbs`. No invite or setup command is required.
+background service. When enabled, the widget verifies Omarchy locally, creates
+a device credential, registers it, and then checks for new activity every five
+minutes. The credential is stored with mode `0600` under
+`$XDG_STATE_HOME/omarchy-bbs`. No invite or setup command is required. Clicking
+the bar icon opens the authenticated board. Notifications never include message
+content; clicking one opens the board.
 
 ## Security model
 

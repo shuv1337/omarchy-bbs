@@ -46,7 +46,7 @@ BarWidget {
     interval: 300000
     repeat: true
     running: true
-    triggeredOnStart: false
+    triggeredOnStart: true
     onTriggered: root.launch("status --notify")
   }
 
