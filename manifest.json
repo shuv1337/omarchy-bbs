@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.thoughtlesslabs.omarchy-bbs",
+  "name": "Omarchy BBS",
+  "version": "0.1.0",
+  "author": "thoughtlesslabs",
+  "license": "MIT",
+  "description": "A private message board launched and authenticated from Omarchy",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy BBS",
+    "description": "Open the Omarchy-only message board",
+    "category": "Social",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
