@@ -48,6 +48,22 @@ Panel {
     if (bridge.running) queuedRequest = ({action: action, input: input || ""})
     else run(action, input || "")
   }
+  function diagnostic() {
+    return {
+      controllerOpen: root.controller.open,
+      windowOpen: panel.open,
+      windowVisible: panel.visible,
+      screenWidth: panel.screenW,
+      screenHeight: panel.screenH,
+      anchorWidth: panel.anchorW,
+      anchorHeight: panel.anchorH,
+      contentWidth: panel.contentWidth,
+      contentHeight: panel.contentHeight,
+      uiScreen: root.screen,
+      bridgeRunning: bridge.running,
+      error: root.errorMessage
+    }
+  }
   function parseResult(text) {
     var result
     try { result = JSON.parse(String(text || "{}")) }
