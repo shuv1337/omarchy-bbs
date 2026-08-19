@@ -129,7 +129,7 @@ def register() -> None:
         "omarchy_version": omarchy_version(),
     })
     save_device({"device_id": device_id, "secret": secret, "handle": response["handle"], "server_url": server_url()})
-    notify("Omarchy BBS", f"You are tuned in as @{response['handle']}.")
+    notify("Omarchy BBS", f"You joined as @{response['handle']}.")
     print(json.dumps({"ok": True, "registered": True, "handle": response["handle"]}))
 
 
@@ -181,7 +181,7 @@ def status(should_notify: bool) -> None:
     STATUS_FILE.write_text(json.dumps(response, indent=2) + "\n")
     os.chmod(STATUS_FILE, 0o600)
     if should_notify and response.get("unread", 0) > previous:
-        notify("Omarchy BBS", f"{response['unread']} new transmission{'s' if response['unread'] != 1 else ''}.")
+        notify("Omarchy BBS", f"{response['unread']} new post{'s' if response['unread'] != 1 else ''}.")
     print(json.dumps({"ok": True, "registered": True, **response}))
 
 
@@ -205,13 +205,13 @@ def main() -> None:
         item = read_input(); thread_id = int(item.get("thread_id", 0))
         print(json.dumps(signed_request("/api/thread", f"thread:{thread_id}", {"thread_id": thread_id})))
     elif args.command == "create":
-        item = read_input(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
-        digest = hashlib.sha256(f"{title}\0{body}".encode()).hexdigest()
-        print(json.dumps(signed_request("/api/create", f"create:{digest}", {"title": title, "body": body})))
+        item = read_input(); category = str(item.get("category", "general")).lower().strip(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
+        digest = hashlib.sha256(f"{category}\0{title}\0{body}".encode()).hexdigest()
+        print(json.dumps(signed_request("/api/create", f"create:{digest}", {"category": category, "title": title, "body": body})))
     elif args.command == "reply":
-        item = read_input(); thread_id = int(item.get("thread_id", 0)); body = str(item.get("body", "")).strip()
+        item = read_input(); thread_id = int(item.get("thread_id", 0)); parent_id = int(item.get("parent_reply_id", 0)); body = str(item.get("body", "")).strip()
         digest = hashlib.sha256(body.encode()).hexdigest()
-        print(json.dumps(signed_request("/api/reply", f"reply:{thread_id}:{digest}", {"thread_id": thread_id, "body": body})))
+        print(json.dumps(signed_request("/api/reply", f"reply:{thread_id}:{parent_id}:{digest}", {"thread_id": thread_id, "parent_reply_id": parent_id, "body": body})))
 
 
 if __name__ == "__main__":

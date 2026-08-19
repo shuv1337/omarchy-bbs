@@ -65,8 +65,8 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\uf7c0"
-    tooltipText: "Tune in to Omarchy BBS"
+    text: "\uf086"
+    tooltipText: "Open Omarchy BBS"
     active: root.opened
     onPressed: function(b) {
       root.toggle()

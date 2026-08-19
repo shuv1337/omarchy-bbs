@@ -17,6 +17,11 @@ Panel {
   property string handle: ""
   property string errorMessage: ""
   property var currentThread: ({})
+  property string categoryFilter: "all"
+  property string composeCategory: "general"
+  property int replyTargetId: 0
+  property string replyTargetHandle: ""
+  property var boardCategories: ["general", "projects", "help", "showcase", "meta"]
   property string pendingAction: ""
   property string pendingInput: ""
   property var queuedRequest: null
@@ -44,6 +49,12 @@ Panel {
   function refreshIdentity() { screen = "loading"; run("identity", "") }
   function refreshThreads() { screen = "loading"; run("threads", "") }
   function openThread(id) { screen = "loading"; run("thread", JSON.stringify({thread_id: id})) }
+  function selectReplyTarget(id, handle) {
+    replyTargetId = id
+    replyTargetHandle = handle
+    replyBody.forceActiveFocus()
+  }
+  function clearReplyTarget() { replyTargetId = 0; replyTargetHandle = "" }
   function continueWith(action, input) {
     if (bridge.running) queuedRequest = ({action: action, input: input || ""})
     else run(action, input || "")
@@ -67,7 +78,7 @@ Panel {
   function parseResult(text) {
     var result
     try { result = JSON.parse(String(text || "{}")) }
-    catch (e) { errorMessage = "The receiver returned an unreadable signal."; return }
+    catch (e) { errorMessage = "The server returned an unreadable response."; return }
     if (!result.ok) { errorMessage = result.error || "The request failed."; if (screen === "loading") screen = handle ? "threads" : "onboarding"; return }
     if (pendingAction === "identity") {
       if (result.registered) { handle = result.handle; screen = "loading"; continueWith("threads", "") }
@@ -76,15 +87,25 @@ Panel {
       handle = result.handle; screen = "loading"; continueWith("threads", "")
     } else if (pendingAction === "threads") {
       threadModel.clear()
+      boardCategories = result.categories || boardCategories
       var rows = result.threads || []
       for (var i = 0; i < rows.length; ++i) threadModel.append(rows[i])
       handle = result.handle || handle; screen = "threads"
     } else if (pendingAction === "thread") {
-      currentThread = result.thread; screen = "thread"
+      var item = result.thread
+      var depths = ({})
+      var replies = item.replies || []
+      for (var j = 0; j < replies.length; ++j) {
+        var parent = replies[j].parent_reply_id || 0
+        replies[j].depth = parent && depths[parent] !== undefined ? Math.min(depths[parent] + 1, 4) : 0
+        depths[replies[j].id] = replies[j].depth
+      }
+      item.replies = replies
+      currentThread = item; clearReplyTarget(); screen = "thread"
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
-      replyBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id}))
+      replyBody.text = ""; clearReplyTarget(); screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id}))
     }
   }
 
@@ -97,7 +118,7 @@ Panel {
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.parseResult(text) }
     stderr: StdioCollector { waitForEnd: true }
     onExited: function(code) {
-      if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS receiver could not complete the request."
+      if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS client could not complete the request."
       if (root.queuedRequest) {
         var next = root.queuedRequest
         root.queuedRequest = null
@@ -143,14 +164,14 @@ Panel {
         PanelHero {
           width: parent.width
           title: "OMARCHY // BBS"
-          meta: root.handle ? "@" + root.handle : "LOCAL FREQUENCY"
-          detail: root.screen === "onboarding" ? "TUNE IN" : "ENCRYPTED"
+          meta: root.handle ? "@" + root.handle : "COMMUNITY BOARD"
+          detail: root.screen === "onboarding" ? "JOIN" : "ENCRYPTED"
           foreground: root.foreground
           fontFamily: root.panelFont
           iconComponent: Component {
             Item {
               implicitWidth: Style.space(42); implicitHeight: Style.space(42)
-              Text { anchors.centerIn: parent; text: "\uf7c0"; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.display }
+              Text { anchors.centerIn: parent; text: "\uf086"; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.display }
               Rectangle { width: Style.space(6); height: width; radius: width / 2; color: root.accent; anchors.right: parent.right; anchors.bottom: parent.bottom }
             }
           }
@@ -170,17 +191,17 @@ Panel {
 
         Text {
           visible: root.screen === "loading"
-          width: parent.width; text: "SCANNING FREQUENCY…"; color: root.foreground
+          width: parent.width; text: "LOADING…"; color: root.foreground
           font.family: root.panelFont; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter
         }
 
         Column {
           visible: root.screen === "onboarding"
           width: parent.width; spacing: Style.space(10)
-          PanelSectionHeader { text: "CHOOSE YOUR CALL SIGN"; foreground: root.foreground; fontFamily: root.panelFont }
-          Text { width: parent.width; text: "Your hostname is suggested. Change it now if you want—this public name identifies your transmissions."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
+          PanelSectionHeader { text: "CHOOSE YOUR USERNAME"; foreground: root.foreground; fontFamily: root.panelFont }
+          Text { width: parent.width; text: "Your hostname is suggested. Change it now if you want—this public username appears on your posts."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
           TextField { id: handleField; width: parent.width; foreground: root.foreground; placeholderText: "hostname"; maximumLength: 32; onAccepted: joinButton.clicked() }
-          Button { id: joinButton; width: parent.width; text: bridge.running ? "Tuning…" : "Join frequency"; iconText: "\uf1eb"; leftAlign: true; bordered: true; focusable: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("register", JSON.stringify({handle: handleField.text})) }
+          Button { id: joinButton; width: parent.width; text: bridge.running ? "Joining…" : "Join board"; iconText: "\uf086"; leftAlign: true; bordered: true; focusable: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("register", JSON.stringify({handle: handleField.text})) }
           Text { width: parent.width; text: "Registration requires the installed Omarchy client. Your device credential stays on this machine."; color: Qt.darker(root.foreground, 1.5); font.family: root.panelFont; font.pixelSize: Style.font.caption; wrapMode: Text.WordWrap }
         }
 
@@ -188,15 +209,24 @@ Panel {
           visible: root.screen === "threads"
           width: parent.width; spacing: Style.space(7)
           Row { width: parent.width; spacing: Style.space(7)
-            Button { width: (parent.width - parent.spacing) * .62; text: "New transmission"; iconText: "\uf1d8"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.screen = "compose" }
+            Button { width: (parent.width - parent.spacing) * .62; text: "New post"; iconText: "\uf1d8"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.screen = "compose" }
             Button { width: (parent.width - parent.spacing) * .38; text: "Refresh"; iconText: "\uf021"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
           }
-          Text { visible: threadModel.count === 0; width: parent.width; text: "NO TRANSMISSIONS YET — YOU HAVE THE CHANNEL."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
+          PanelSectionHeader { text: "CATEGORIES"; foreground: root.foreground; fontFamily: root.panelFont }
+          Flow {
+            width: parent.width; spacing: Style.space(5)
+            Repeater {
+              model: ["all"].concat(root.boardCategories)
+              delegate: Button { required property string modelData; text: modelData.toUpperCase(); bordered: true; foreground: root.foreground; active: root.categoryFilter === modelData; onClicked: root.categoryFilter = modelData }
+            }
+          }
+          Text { visible: threadModel.count === 0; width: parent.width; text: "NO POSTS YET."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
           Repeater {
             model: threadModel
             delegate: Button {
-              required property int id; required property string title; required property string handle; required property string created_at; required property int replies
-              width: parent.width; text: title + "\n@" + handle + "  ·  " + replies + " repl.  ·  " + created_at; iconText: "\uf075"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.openThread(id)
+              required property int id; required property string category; required property string title; required property string handle; required property string created_at; required property int replies
+              visible: root.categoryFilter === "all" || root.categoryFilter === category
+              width: parent.width; text: "[" + category.toUpperCase() + "]  " + title + "\n@" + handle + "  ·  " + replies + " repl.  ·  " + created_at; iconText: "\uf075"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.openThread(id)
             }
           }
           Text { width: parent.width; text: "N  NEW    R  REFRESH    ESC  CLOSE"; color: Qt.darker(root.foreground, 1.5); font.family: root.panelFont; font.pixelSize: Style.font.caption }
@@ -205,11 +235,16 @@ Panel {
         Column {
           visible: root.screen === "compose"
           width: parent.width; spacing: Style.space(8)
-          PanelSectionHeader { text: "NEW TRANSMISSION"; foreground: root.foreground; fontFamily: root.panelFont }
+          PanelSectionHeader { text: "NEW POST"; foreground: root.foreground; fontFamily: root.panelFont }
+          Text { width: parent.width; text: "CATEGORY"; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.caption }
+          Flow {
+            width: parent.width; spacing: Style.space(5)
+            Repeater { model: root.boardCategories; delegate: Button { required property string modelData; text: modelData.toUpperCase(); bordered: true; foreground: root.foreground; active: root.composeCategory === modelData; onClicked: root.composeCategory = modelData } }
+          }
           TextField { id: subjectField; width: parent.width; foreground: root.foreground; placeholderText: "Subject"; maximumLength: 120 }
           Controls.TextArea { id: composeBody; width: parent.width; height: Style.space(150); placeholderText: "Write something worth reading."; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
           Row { spacing: Style.space(7)
-            Button { text: "Transmit"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("create", JSON.stringify({title: subjectField.text, body: composeBody.text})) }
+            Button { text: "Post"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("create", JSON.stringify({category: root.composeCategory, title: subjectField.text, body: composeBody.text})) }
             Button { text: "Cancel"; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
           }
         }
@@ -217,7 +252,8 @@ Panel {
         Column {
           visible: root.screen === "thread"
           width: parent.width; spacing: Style.space(8)
-          Button { text: "Back to frequency"; iconText: "\uf060"; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
+          Button { text: "Back to posts"; iconText: "\uf060"; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
+          Text { width: parent.width; text: "[" + String(root.currentThread.category || "general").toUpperCase() + "]"; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.caption }
           Text { width: parent.width; text: root.currentThread.title || ""; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.heading; font.bold: true; wrapMode: Text.WordWrap }
           Text { width: parent.width; text: "@" + (root.currentThread.handle || "") + "  ·  " + (root.currentThread.created_at || ""); color: Qt.darker(root.foreground, 1.4); font.family: root.panelFont; font.pixelSize: Style.font.caption }
           Text { width: parent.width; text: root.currentThread.body || ""; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; wrapMode: Text.WordWrap }
@@ -225,7 +261,8 @@ Panel {
             model: root.currentThread.replies || []
             delegate: Rectangle {
               required property var modelData
-              width: parent.width
+              x: (modelData.depth || 0) * Style.space(16)
+              width: parent.width - x
               implicitHeight: replyColumn.implicitHeight + Style.space(14)
               color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05)
               radius: Style.cornerRadius
@@ -249,11 +286,30 @@ Panel {
                   font.pixelSize: Style.font.bodySmall
                   wrapMode: Text.WordWrap
                 }
+                Button {
+                  text: "Reply to @" + modelData.handle
+                  iconText: "\uf3e5"
+                  bordered: false
+                  foreground: root.foreground
+                  onClicked: root.selectReplyTarget(modelData.id, modelData.handle)
+                }
               }
             }
           }
-          Controls.TextArea { id: replyBody; width: parent.width; height: Style.space(90); placeholderText: "Reply on this frequency"; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
-          Button { text: "Reply"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("reply", JSON.stringify({thread_id: root.currentThread.id, body: replyBody.text})) }
+          Row {
+            visible: root.replyTargetId > 0
+            spacing: Style.space(6)
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Replying to @" + root.replyTargetHandle
+              color: root.accent
+              font.family: root.panelFont
+              font.pixelSize: Style.font.bodySmall
+            }
+            Button { text: "Cancel"; bordered: false; foreground: root.foreground; onClicked: root.clearReplyTarget() }
+          }
+          Controls.TextArea { id: replyBody; width: parent.width; height: Style.space(90); placeholderText: root.replyTargetId > 0 ? "Write a threaded reply" : "Write a reply"; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
+          Button { text: "Reply"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("reply", JSON.stringify({thread_id: root.currentThread.id, parent_reply_id: root.replyTargetId, body: replyBody.text})) }
         }
       }
       }

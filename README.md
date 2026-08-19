@@ -13,7 +13,7 @@ browser tab is opened.
 
 The plugin never installs packages, requests elevated privileges, or starts a
 background service. On first open, it verifies Omarchy locally and suggests the
-machine hostname as an editable public call sign. Registration happens only
+machine hostname as an editable public username. Registration happens only
 after the user confirms that name. The generated device credential is stored
 with mode `0600` under `$XDG_STATE_HOME/omarchy-bbs`. After joining, the widget
 checks for new activity every five minutes. Notifications never include message
@@ -35,8 +35,8 @@ throttling, CSRF protection, strict browser security headers, HTTPS-only
 headers, rate limits, strict size limits, and durable one-time nonces. Handles
 are public and default to the hostname only after the user sees and confirms it.
 
-Click the installed terminal-signal bar icon. Pick or confirm the suggested
-call sign, then select **Join frequency**. No terminal commands are required.
+Click the installed discussion icon. Pick or confirm the suggested username,
+then select **Join board**. No terminal commands are required.
 For development against another server, create `~/.config/omarchy-bbs/config.json`:
 
 ```json

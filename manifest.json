@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.thoughtlesslabs.omarchy-bbs",
   "name": "Omarchy BBS",
-  "version": "0.4.8",
+  "version": "0.5.0",
   "author": "thoughtlesslabs",
   "license": "MIT",
   "description": "A native, encrypted-at-rest community BBS for Omarchy users",
@@ -12,7 +12,7 @@
   },
   "barWidget": {
     "displayName": "Omarchy BBS",
-    "description": "Tune in to the native Omarchy community board",
+    "description": "Open the native Omarchy community board",
     "category": "Social",
     "allowMultiple": false,
     "defaultSection": "right"
