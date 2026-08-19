@@ -1,54 +1,40 @@
 # Omarchy BBS
 
-A small, dependency-free message board whose normal entrance is an enrolled
-Omarchy machine. It includes an Omarchy 4 bar widget, a device client, and a
-SQLite-backed web server.
+A small community message board whose normal entrance is an Omarchy machine.
+It includes an Omarchy 4 bar widget, an automatic device client, and a PHP/MySQL
+web application.
 
 ## Requirements and boundaries
 
 - Omarchy Quattro (4.x) with its Quickshell-based plugin runtime
-- Python 3, including the standard-library `sqlite3` module
+- Python 3 on the Omarchy client
 - A graphical browser registered with the desktop
-- A separately operated BBS server reachable from each client
+- The hosted BBS at `https://bbs.thoughtlesslabs.com`
 
 The plugin never installs packages, requests elevated privileges, or starts a
-background service. Its bar button only runs the bundled client. The operator
-starts and secures `server.py` separately; the server writes only to
-`OMARCHY_BBS_DB` (or `bbs.db` in the repository by default). The client writes
-its device credential under `$XDG_STATE_HOME/omarchy-bbs` and reads an optional
-server URL from `$XDG_CONFIG_HOME/omarchy-bbs/config.json`.
+background service. Its bar button only runs the bundled client. On first click
+the client verifies Omarchy locally, creates a device credential, registers it,
+and opens the board. The credential is stored with mode `0600` under
+`$XDG_STATE_HOME/omarchy-bbs`. No invite or setup command is required.
 
 ## Security model
 
-The server accepts only enrolled devices. Enrollment requires an invite code,
-and the client refuses to enroll or log in unless `/usr/share/omarchy` exists
-and `omarchy version` succeeds. Each click creates a signed, single-use login
-URL that expires after 60 seconds; the browser receives an HttpOnly session
-cookie.
+The server accepts registered devices, and the client refuses to register or
+log in unless `/usr/share/omarchy` exists and `omarchy version` succeeds. Each
+click creates a signed, single-use login URL that expires after 90 seconds; the
+browser receives a Secure, HttpOnly, SameSite session cookie.
 
 Omarchy is open source, so no software-only OS check can be unforgeable. An
-attacker with a valid invite can imitate the client. The invite is therefore
-the real community boundary; the local Omarchy check makes the intended path
-pleasant and prevents accidental non-Omarchy access. For a public production
-service, put the server behind HTTPS and add rate limiting, backups, moderation,
-and durable shared session/nonce storage.
+attacker can imitate the client. This is a practical community boundary, not
+hardware attestation. The production PHP app encrypts message titles, bodies,
+and device secrets at rest using authenticated libsodium encryption with a key
+stored outside both the database and document root. It also adds registration
+throttling, CSRF protection, strict browser security headers, HTTPS-only
+cookies, and durable sessions and one-time nonces. Handles are random
+pseudonyms and contain no local account name.
 
-## Run a local board
-
-```bash
-python3 server.py invite
-python3 server.py serve
-```
-
-Copy the printed invite, then enroll from an Omarchy machine:
-
-```bash
-python3 client.py enroll your_handle PASTE_INVITE_HERE
-python3 client.py open
-```
-
-The default URL is `http://127.0.0.1:8787`. For a hosted board, create
-`~/.config/omarchy-bbs/config.json`:
+Click the installed `BBS` bar widget. Registration and sign-in are automatic.
+For development against another server, create `~/.config/omarchy-bbs/config.json`:
 
 ```json
 {"server_url": "https://bbs.example.com"}
@@ -86,7 +72,11 @@ server database before reusing its handle.
 
 ## Server operations
 
-`OMARCHY_BBS_DB` changes the SQLite database path. Bind to a public interface
-with `python3 server.py serve --host 0.0.0.0`, but never expose the built-in
-HTTP server directly to the internet; terminate HTTPS and apply request limits
-in a production reverse proxy.
+The production application is in `web/` and requires PHP 8 with PDO MySQL. Its
+configuration is intentionally stored outside the public document root at
+`~/.config/omarchy-bbs.php`; credentials must never be committed. The app
+creates or updates its own tables on startup. Back up the MySQL database and
+review registrations periodically before operating it as a public service.
+Back up `~/.config/omarchy-bbs.php` separately and securely: losing its
+`app_key` makes encrypted messages unrecoverable, while disclosure of both
+that file and the database defeats encryption at rest.
