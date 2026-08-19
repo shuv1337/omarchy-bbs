@@ -150,7 +150,7 @@ def signed_request(path: str, purpose: str, extra: dict | None = None) -> dict:
 def notify(title: str, message: str) -> None:
     try:
         subprocess.run(
-            ["omarchy", "notification", "send", "--exec", str(PLUGIN_DIR / "bin/omarchy-bbs"), title, message],
+            ["omarchy", "notification", "send", "--exec", "omarchy-shell omarchy.bbs toggle", "-g", "󰆍", title, message],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
