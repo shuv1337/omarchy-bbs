@@ -98,10 +98,19 @@ Panel {
         else if ((text === "n" || text === "N") && root.screen === "threads") root.screen = "compose"
       }
 
-      Column {
-        id: content
-        width: parent.width
-        spacing: Style.space(9)
+      Flickable {
+        id: scroller
+        anchors.fill: parent
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        contentWidth: width
+        contentHeight: content.implicitHeight
+        Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
+
+        Column {
+          id: content
+          width: scroller.width - (scroller.contentHeight > scroller.height ? Style.space(8) : 0)
+          spacing: Style.space(9)
 
         PanelHero {
           width: parent.width
@@ -218,6 +227,7 @@ Panel {
           Controls.TextArea { id: replyBody; width: parent.width; height: Style.space(90); placeholderText: "Reply on this frequency"; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
           Button { text: "Reply"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("reply", JSON.stringify({thread_id: root.currentThread.id, body: replyBody.text})) }
         }
+      }
       }
     }
   }
