@@ -19,6 +19,7 @@ Panel {
   property var currentThread: ({})
   property string pendingAction: ""
   property string pendingInput: ""
+  property var queuedRequest: null
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color accent: Color.accent
@@ -43,16 +44,20 @@ Panel {
   function refreshIdentity() { screen = "loading"; run("identity", "") }
   function refreshThreads() { screen = "loading"; run("threads", "") }
   function openThread(id) { screen = "loading"; run("thread", JSON.stringify({thread_id: id})) }
+  function continueWith(action, input) {
+    if (bridge.running) queuedRequest = ({action: action, input: input || ""})
+    else run(action, input || "")
+  }
   function parseResult(text) {
     var result
     try { result = JSON.parse(String(text || "{}")) }
     catch (e) { errorMessage = "The receiver returned an unreadable signal."; return }
     if (!result.ok) { errorMessage = result.error || "The request failed."; if (screen === "loading") screen = handle ? "threads" : "onboarding"; return }
     if (pendingAction === "identity") {
-      if (result.registered) { handle = result.handle; refreshThreads() }
+      if (result.registered) { handle = result.handle; screen = "loading"; continueWith("threads", "") }
       else { handleField.text = result.suggested_handle; screen = "onboarding" }
     } else if (pendingAction === "register") {
-      handle = result.handle; refreshThreads()
+      handle = result.handle; screen = "loading"; continueWith("threads", "")
     } else if (pendingAction === "threads") {
       threadModel.clear()
       var rows = result.threads || []
@@ -61,9 +66,9 @@ Panel {
     } else if (pendingAction === "thread") {
       currentThread = result.thread; screen = "thread"
     } else if (pendingAction === "create") {
-      subjectField.text = ""; composeBody.text = ""; openThread(result.thread_id)
+      subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
-      replyBody.text = ""; openThread(currentThread.id)
+      replyBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id}))
     }
   }
 
@@ -75,7 +80,14 @@ Panel {
     onStarted: { if (root.pendingInput !== "") write(root.pendingInput + "\n") }
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.parseResult(text) }
     stderr: StdioCollector { waitForEnd: true }
-    onExited: function(code) { if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS receiver could not complete the request." }
+    onExited: function(code) {
+      if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS receiver could not complete the request."
+      if (root.queuedRequest) {
+        var next = root.queuedRequest
+        root.queuedRequest = null
+        Qt.callLater(function() { root.run(next.action, next.input) })
+      }
+    }
   }
 
   KeyboardPanel {
