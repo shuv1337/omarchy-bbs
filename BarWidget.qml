@@ -74,7 +74,7 @@ BarWidget {
           var result = JSON.parse(String(text || "{}"))
           if (result.ok) {
             root.unreadCount = Number(result.unread || 0)
-            root.mentionCount = Number(result.mentions || 0)
+            root.mentionCount = Number(result.alert_mentions === undefined ? (result.mentions || 0) : result.alert_mentions)
             root.updateAvailable = result.update_available === true
             root.latestVersion = String(result.latest_version || "")
           }
@@ -88,6 +88,7 @@ BarWidget {
     function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath, panel: panelLoader.item ? panelLoader.item.diagnostic() : null}) }
     function open(): void { root.open() }
     function openThread(threadId: int): void { if (panelLoader.item) panelLoader.item.openToThread(threadId) }
+    function openReply(threadId: int, replyId: int): void { if (panelLoader.item) panelLoader.item.openToReply(threadId, replyId) }
     function close(): void { root.close() }
     function show(): void { root.open() }
     function hide(): void { root.close() }

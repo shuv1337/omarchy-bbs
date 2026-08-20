@@ -111,7 +111,7 @@ def update_status() -> dict:
         return {"update_available": False, "current_version": current, "latest_version": current}
     try:
         cached = json.loads(UPDATE_FILE.read_text())
-        if time.time() - float(cached.get("checked_at", 0)) < UPDATE_CHECK_SECONDS:
+        if cached.get("current_version") == current and time.time() - float(cached.get("checked_at", 0)) < UPDATE_CHECK_SECONDS:
             return cached
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         pass
@@ -208,8 +208,8 @@ def content_request(path: str, action: str, payload: dict) -> dict:
     return signed_request(path, content_purpose(action, payload), payload)
 
 
-def notify(title: str, message: str, thread_id: int = 0) -> None:
-    action = f"omarchy shell omarchy.bbs openThread {thread_id}" if thread_id > 0 else "omarchy shell omarchy.bbs open"
+def notify(title: str, message: str, thread_id: int = 0, reply_id: int = 0) -> None:
+    action = f"omarchy shell omarchy.bbs openReply {thread_id} {reply_id}" if thread_id > 0 and reply_id > 0 else (f"omarchy shell omarchy.bbs openThread {thread_id}" if thread_id > 0 else "omarchy shell omarchy.bbs open")
     try:
         subprocess.run(
             ["omarchy", "notification", "send", "--exec", action, "-g", "", title, message],
@@ -243,10 +243,11 @@ def status(should_notify: bool) -> None:
     events = response.get("events", [])
     had_event_baseline = "seen_event_ids" in previous_state
     seen = set(previous_state.get("seen_event_ids", []))
-    new_events = [event for event in events if event.get("event_id") not in seen] if had_event_baseline else []
+    new_events = [event for event in events if event.get("event_id") not in seen and event.get("deliver", True)] if had_event_baseline else []
     stored = {
         "unread": int(response.get("unread", 0)),
         "mentions": int(response.get("mentions", 0)),
+        "alert_mentions": int(response.get("alert_mentions", response.get("mentions", 0))),
         "unread_threads": int(response.get("unread_threads", 0)),
     }
     stored["seen_event_ids"] = list(dict.fromkeys(
@@ -260,7 +261,7 @@ def status(should_notify: bool) -> None:
             action = "mentioned you in" if event.get("kind") == "mention" else ("posted" if event.get("kind") == "new_post" else "replied to")
             actor = html.escape(str(event.get("actor", "someone")), quote=True)
             title = html.escape(str(event.get("title", "a post")), quote=True)
-            notify("Omarchy BBS", f"@{actor} {action} “{title}”.", int(event.get("thread_id", 0)))
+            notify("Omarchy BBS", f"@{actor} {action} “{title}”.", int(event.get("thread_id", 0)), int(event.get("reply_id", 0)))
         if len(new_events) > 3:
             notify("Omarchy BBS", f"{len(new_events) - 3} more new replies or mentions.")
     if should_notify and update["update_available"] and previous_state.get("notified_update") != update["latest_version"]:
@@ -278,6 +279,7 @@ def main() -> None:
     sub.add_parser("register")
     sub.add_parser("threads")
     sub.add_parser("thread")
+    sub.add_parser("thread-notifications")
     sub.add_parser("create")
     sub.add_parser("reply")
     sub.add_parser("like")
@@ -298,8 +300,8 @@ def main() -> None:
         item = read_input()
         print(json.dumps(content_request("/api/threads", "threads", item)))
     elif args.command == "thread":
-        item = read_input(); thread_id = int(item.get("thread_id", 0)); reply_page = int(item.get("reply_page", 0))
-        print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id, "reply_page": reply_page})))
+        item = read_input(); thread_id = int(item.get("thread_id", 0)); reply_page = int(item.get("reply_page", 0)); reply_id = int(item.get("reply_id", 0))
+        print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id, "reply_page": reply_page, "reply_id": reply_id})))
     elif args.command == "create":
         item = read_input(); category = str(item.get("category", "general")).lower().strip(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
         digest = hashlib.sha256(f"{category}\0{title}\0{body}".encode()).hexdigest()
@@ -329,9 +331,10 @@ def main() -> None:
                 record["handle"] = updated_handle
                 save_device(record)
         print(json.dumps(response))
-    elif args.command in {"like", "edit", "delete", "report", "profile", "moderation"}:
+    elif args.command in {"like", "edit", "delete", "report", "profile", "moderation", "thread-notifications"}:
         item = read_input()
-        print(json.dumps(content_request(f"/api/{args.command}", args.command, item)))
+        action = "thread_notifications" if args.command == "thread-notifications" else args.command
+        print(json.dumps(content_request(f"/api/{args.command}", action, item)))
     elif args.command == "mentions":
         item = read_input()
         print(json.dumps(content_request("/api/mentions", "mentions", item)))

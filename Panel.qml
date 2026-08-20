@@ -23,7 +23,7 @@ Panel {
   property var queuedRequest: null
   property var currentThread: ({})
   property var currentProfile: ({})
-  property var preferences: ({handle: "", bio: "", mention_notifications: true})
+  property var preferences: ({handle: "", bio: "", mention_notifications: true, reply_notifications: true, new_post_notifications: false, desktop_notifications: true})
   property var boardCategories: ["general", "projects", "help", "showcase", "meta"]
   property string categoryFilter: "all"
   property string composeCategory: "general"
@@ -38,6 +38,7 @@ Panel {
   property int selectedActivityIndex: 0
   property int selectedReportIndex: 0
   property int replyTargetId: 0
+  property int focusReplyId: 0
   property string replyTargetHandle: ""
   property bool replyComposerOpen: false
   property string editorKind: ""
@@ -119,6 +120,7 @@ Panel {
 
   function open() { root.controller.show(); refreshIdentity() }
   function openToThread(id) { root.controller.show();if(bridge.running)queuedRequest=({action:"thread",input:JSON.stringify({thread_id:id,reply_page:0})});else openThread(id,0) }
+  function openToReply(threadId, replyId) { root.controller.show();var input=JSON.stringify({thread_id:threadId,reply_page:0,reply_id:replyId});if(bridge.running)queuedRequest=({action:"thread",input:input});else run("thread",input) }
   function close() { root.controller.hide() }
   function toggle() { root.opened ? root.close() : root.open() }
   function switchPanel(direction) { return root.bar && root.bar.switchPanelFrom ? root.bar.switchPanelFrom(root.barIdentity, direction) : false }
@@ -142,7 +144,7 @@ Panel {
   function activateSelection() {
     if (screen === "threads" && threadModel.count) openThread(threadModel.get(selectedPostIndex).id)
     else if (screen === "thread") { var reply=selectedReply();if(reply)selectReplyTarget(reply.id,reply.handle,selectedReplyIndex);else startOriginalReply() }
-    else if (screen === "mentions" && mentionModel.count) openThread(mentionModel.get(selectedMentionIndex).thread_id)
+    else if (screen === "mentions" && mentionModel.count) { var mention=mentionModel.get(selectedMentionIndex);if(mention.reply_id)openToReply(mention.thread_id,Number(mention.reply_id));else openThread(mention.thread_id) }
     else if (screen === "profile") { var activity=currentProfile.activity||[];if(activity.length)openThread(activity[selectedActivityIndex].thread_id) }
     else if (screen === "moderation" && reportModel.count) { var report=reportModel.get(selectedReportIndex);if(report.thread_id>0)openThread(report.thread_id) }
   }
@@ -156,7 +158,8 @@ Panel {
   function submitReply(body, targetId) { if(!bridge.running)run("reply",JSON.stringify({thread_id:currentThread.id,parent_reply_id:targetId,body:body})) }
   function submitEdit() { var p={kind:editorKind,id:editorId,body:editBody.text};if(editorKind==="thread"){p.title=editTitle.text;p.category=editCategory}run("edit",JSON.stringify(p)) }
   function submitReport() { run("report",JSON.stringify({kind:reportKind,id:reportId,reason:reportReason.text})) }
-  function submitPreferences() { if(!bridge.running)run("preferences",JSON.stringify({action:"set",handle:profileHandleField.text,bio:bioField.text,mention_notifications:mentionToggle.checked})) }
+  function submitPreferences() { if(!bridge.running)run("preferences",JSON.stringify({action:"set",handle:profileHandleField.text,bio:bioField.text,mention_notifications:mentionToggle.checked,reply_notifications:replyToggle.checked,new_post_notifications:newPostToggle.checked,desktop_notifications:desktopToggle.checked})) }
+  function cycleThreadNotifications() { var current=String(currentThread.notification_mode||"default");var next=current==="default"?"watch":(current==="watch"?"mute":"default");run("thread-notifications",JSON.stringify({thread_id:currentThread.id,mode:next})) }
   function toggleHeart() { if(screen!=="thread")return;var reply=selectedReply();var item=reply||currentThread;if(!item||item.deleted)return;run("like",JSON.stringify({kind:reply?"reply":"thread",id:item.id,enabled:!item.liked})) }
   function cycleCategory(current, delta) { var index=boardCategories.indexOf(current);return boardCategories[(index+delta+boardCategories.length)%boardCategories.length] }
   function editorKey(event, kind) {
@@ -185,6 +188,7 @@ Panel {
     else if (key === "0" && screen === "thread") { selectedReplyIndex=-1;scroller.contentY=0 }
     else if (key === "r" && screen === "thread") activateSelection()
     else if (key === "H" && screen === "thread") toggleHeart()
+    else if ((key === "t" || key === "T") && screen === "thread") cycleThreadNotifications()
     else if ((key === "e" || key === "E") && screen === "profile" && currentProfile.mine) loadPreferences()
     else if ((key === "e" || key === "E") && screen === "thread") { reply=selectedReply();if(reply&&(reply.mine||reply.can_moderate))prepareEdit("reply",reply);else if(!reply&&(currentThread.mine||currentThread.can_moderate))prepareEdit("thread",currentThread) }
     else if ((key === "f" || key === "F") && screen === "thread") { reply=selectedReply();prepareReport(reply?"reply":"thread",reply?reply.id:currentThread.id) }
@@ -204,7 +208,7 @@ Panel {
   }
   function refreshIdentity() { screen = "loading"; run("identity", "") }
   function refreshThreads() { screen = "loading"; run("threads", JSON.stringify({query: searchField.text, category: categoryFilter, page: currentPage})) }
-  function openThread(id, page) { screen = "loading"; run("thread", JSON.stringify({thread_id: id, reply_page: page || 0})) }
+  function openThread(id, page, replyId) { screen = "loading"; run("thread", JSON.stringify({thread_id: id, reply_page: page || 0, reply_id: replyId || 0})) }
   function loadProfile(name) { screen = "loading"; run("profile", JSON.stringify({handle: name || handle})) }
   function loadPreferences() { screen = "loading"; run("preferences", JSON.stringify({action: "get"})) }
   function loadMentions(markRead) { screen = "loading"; run("mentions", JSON.stringify({page: 1, mark_read: !!markRead})) }
@@ -241,6 +245,7 @@ Panel {
         if (row.unread === undefined) row.unread = false
         if (row.likes === undefined) row.likes = 0
         if (row.liked === undefined) row.liked = false
+        if (row.notification_mode === undefined) row.notification_mode = "default"
         if (row.unread) visibleUnreadCount++
         threadModel.append(row)
       }
@@ -248,14 +253,16 @@ Panel {
     } else if (pendingAction === "thread") {
       clearReplyTarget();var item = result.thread; var replies = item.replies || []
       for (var j = 0; j < replies.length; ++j) { if(replies[j].depth===undefined)replies[j].depth=replies[j].parent_reply_id?1:0;if(replies[j].likes===undefined)replies[j].likes=0;if(replies[j].liked===undefined)replies[j].liked=false }
-      if(item.likes===undefined)item.likes=0;if(item.liked===undefined)item.liked=false
-      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; selectedReplyIndex=-1;screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){keyCatcher.forceActiveFocus()})
+      if(item.likes===undefined)item.likes=0;if(item.liked===undefined)item.liked=false;if(item.notification_mode===undefined)item.notification_mode="default"
+      focusReplyId=item.focus_reply_id||0;selectedReplyIndex=-1;for(j=0;j<replies.length;++j)if(replies[j].id===focusReplyId){selectedReplyIndex=j;break}
+      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1;screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){var target=selectedReplyIndex>=0?replyRepeater.itemAt(selectedReplyIndex):null;if(target)ensureVisible(target);keyCatcher.forceActiveFocus()})
       if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
       clearReplyTarget(); noticeMessage = "Reply added"; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id, reply_page: result.reply_page || 0}))
     } else if (pendingAction === "like") afterMutation(result.liked?"Heart added":"Heart removed")
+    else if (pendingAction === "thread-notifications") afterMutation(result.mode==="watch"?"Watching this thread":(result.mode==="mute"?"Thread muted":"Using global notification settings"))
     else if (pendingAction === "edit") afterMutation("Changes saved")
     else if (pendingAction === "delete") {
       if (editorKind === "thread") { noticeMessage = "Post deleted"; currentPage = 1; refreshThreads() } else afterMutation("Reply deleted")
@@ -265,7 +272,7 @@ Panel {
       preferences = result.preferences
       var preferenceRequest={};try{preferenceRequest=JSON.parse(pendingInput||"{}")}catch(e){}
       if(preferenceRequest.action==="set"){handle=preferences.handle||result.handle||handle;noticeMessage="Profile saved";screen="loading";continueWith("profile",JSON.stringify({handle:handle}))}
-      else{profileHandleField.text=preferences.handle||handle;bioField.text=preferences.bio||"";mentionToggle.checked=!!preferences.mention_notifications;screen="preferences";Qt.callLater(function(){profileHandleField.forceActiveFocus()})}
+      else{profileHandleField.text=preferences.handle||handle;bioField.text=preferences.bio||"";mentionToggle.checked=!!preferences.mention_notifications;replyToggle.checked=preferences.reply_notifications!==false;newPostToggle.checked=!!preferences.new_post_notifications;desktopToggle.checked=preferences.desktop_notifications!==false;screen="preferences";Qt.callLater(function(){profileHandleField.forceActiveFocus()})}
     }
     else if (pendingAction === "mentions") { mentionModel.clear(); rows = result.mentions || []; for (i=0;i<rows.length;++i) mentionModel.append(rows[i]);selectedMentionIndex=0;screen = "mentions";Qt.callLater(function(){keyCatcher.forceActiveFocus()}) }
     else if (pendingAction === "moderation") {
@@ -340,7 +347,7 @@ Panel {
             Row{id:updateRow;anchors.fill:parent;anchors.margins:Style.space(6);spacing:Style.space(7);Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"BBS "+(root.hostWidget?root.hostWidget.latestVersion:"")+" available";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}Button{text:"Update now";iconText:"\uf019";bordered:true;foreground:root.foreground;onClicked:root.hostWidget.installUpdate()}}
           }
           Text { visible:root.screen==="threads";width:parent.width;textFormat:Text.PlainText;text:(threadModel.count?"POST "+(root.selectedPostIndex+1)+" OF "+threadModel.count+"  ·  ":"")+"↑↓ SELECT  ·  ENTER OPEN  ·  N NEW  ·  S SEARCH";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
-          Text { visible:root.screen==="thread";width:parent.width;textFormat:Text.PlainText;text:(root.selectedReplyIndex<0?"ORIGINAL POST SELECTED":"REPLY "+(root.selectedReplyIndex+1)+" OF "+(root.currentThread.replies||[]).length+" SELECTED")+"  ·  ↑↓ SELECT  ·  ENTER/R REPLY  ·  H HEART  ·  A REPLY TO POST  ·  E EDIT  ·  F REPORT  ·  X DELETE  ·  ←→ PAGE";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
+          Text { visible:root.screen==="thread";width:parent.width;textFormat:Text.PlainText;text:(root.selectedReplyIndex<0?"ORIGINAL POST SELECTED":"REPLY "+(root.selectedReplyIndex+1)+" OF "+(root.currentThread.replies||[]).length+" SELECTED")+"  ·  ↑↓ SELECT  ·  ENTER/R REPLY  ·  H HEART  ·  T NOTIFY  ·  A REPLY TO POST  ·  E EDIT  ·  F REPORT  ·  X DELETE  ·  ←→ PAGE";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
           Text { visible: root.screen==="loading";width:parent.width;textFormat:Text.PlainText;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
 
           Column {
@@ -374,7 +381,7 @@ Panel {
             Text{visible:root.visibleUnreadCount>0;width:parent.width;textFormat:Text.PlainText;text:"●  "+root.visibleUnreadCount+(root.visibleUnreadCount===1?" THREAD":" THREADS")+" WITH NEW ACTIVITY";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;font.bold:true}
             Text{visible:threadModel.count===0;width:parent.width;textFormat:Text.PlainText;text:"NO POSTS FOUND.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Repeater { id:postRepeater;model:threadModel;delegate:Rectangle{
-              required property int index;required property int id;required property string category;required property string title;required property string handle;required property string created_at;required property int replies;required property int likes;required property bool liked;required property bool pinned;required property bool locked;required property bool unread
+              required property int index;required property int id;required property string category;required property string title;required property string handle;required property string created_at;required property int replies;required property int likes;required property bool liked;required property bool pinned;required property bool locked;required property bool unread;required property string notification_mode
               width:parent.width
               implicitHeight:postCardColumn.implicitHeight+Style.space(16)
               radius:Style.cornerRadius
@@ -390,6 +397,8 @@ Panel {
                   BbsChip{visible:unread;label:"NEW";highlighted:true}
                   BbsChip{visible:pinned;label:"PINNED"}
                   BbsChip{visible:locked;label:"LOCKED"}
+                  BbsChip{visible:notification_mode==="watch";label:"WATCHING";highlighted:true}
+                  BbsChip{visible:notification_mode==="mute";label:"MUTED"}
                 }
                 Text{width:parent.width;textFormat:Text.PlainText;text:title;color:unread?root.accent:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;font.bold:true;wrapMode:Text.WordWrap}
                 Text{width:parent.width;textFormat:Text.PlainText;text:"@"+handle+"  ·  "+replies+" repl.  ·  ♥ "+likes+"  ·  "+created_at;color:liked?root.accent:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
@@ -430,6 +439,7 @@ Panel {
                   BbsChip{label:String(root.currentThread.category||"general").toUpperCase();highlighted:true}
                   BbsChip{visible:!!root.currentThread.pinned;label:"PINNED"}
                   BbsChip{visible:!!root.currentThread.locked;label:"LOCKED"}
+                  BbsChip{visible:String(root.currentThread.notification_mode||"default")!=="default";label:root.currentThread.notification_mode==="watch"?"WATCHING":"MUTED";highlighted:root.currentThread.notification_mode==="watch"}
                 }
                 Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
                 Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
@@ -442,6 +452,7 @@ Panel {
             Flow { width:parent.width;spacing:Style.space(5)
               Button{text:"Reply";iconText:"↩";bordered:true;foreground:root.foreground;onClicked:root.startOriginalReply()}
               Button{text:(root.currentThread.liked?"Hearted":"Heart")+" · "+(root.currentThread.likes||0);iconText:"♥";bordered:true;active:!!root.currentThread.liked;foreground:root.currentThread.liked?root.accent:root.foreground;onClicked:root.toggleHeart()}
+              Button{text:"Notifications: "+(root.currentThread.notification_mode==="watch"?"Watching":(root.currentThread.notification_mode==="mute"?"Muted":"Default"));iconText:root.currentThread.notification_mode==="mute"?"\uf1f6":"\uf0f3";bordered:true;active:root.currentThread.notification_mode==="watch";foreground:root.currentThread.notification_mode==="watch"?root.accent:root.foreground;onClicked:root.cycleThreadNotifications()}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Edit";iconText:"\uf044";bordered:true;foreground:root.foreground;onClicked:root.prepareEdit("thread",root.currentThread)}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Delete";iconText:"\uf2ed";bordered:true;foreground:root.foreground;onClicked:{root.editorKind="thread";root.run("delete",JSON.stringify({kind:"thread",id:root.currentThread.id}))}}
               Button{text:"Report";iconText:"\uf024";bordered:true;foreground:root.foreground;onClicked:root.prepareReport("thread",root.currentThread.id)}
@@ -516,6 +527,10 @@ Panel {
             Text{width:parent.width;textFormat:Text.PlainText;text:"3–32 lowercase letters, numbers, hyphens, or underscores. Usernames are unique.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap}
             Controls.TextArea{id:bioField;width:parent.width;height:Math.max(Style.space(110),contentHeight+topPadding+bottomPadding);textFormat:TextEdit.PlainText;placeholderText:"Short bio";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:root.loadProfile(root.handle);Keys.onPressed:function(event){if((event.modifiers&Qt.ControlModifier)&&event.key===Qt.Key_N){mentionToggle.checked=!mentionToggle.checked;event.accepted=true}else if((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)){root.submitPreferences();event.accepted=true}} background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Controls.CheckBox{id:mentionToggle;text:"Notify me about @mentions";font.family:root.panelFont;palette.windowText:root.foreground}
+            Controls.CheckBox{id:replyToggle;text:"Notify me about replies to my posts or replies";font.family:root.panelFont;palette.windowText:root.foreground}
+            Controls.CheckBox{id:newPostToggle;text:"Notify me about every new post";font.family:root.panelFont;palette.windowText:root.foreground}
+            Controls.CheckBox{id:desktopToggle;text:"Enable desktop notifications";font.family:root.panelFont;palette.windowText:root.foreground}
+            Text{width:parent.width;textFormat:Text.PlainText;text:"Thread settings override these defaults. Watching adds all replies; Muted suppresses alerts without changing unread or mention history.";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap}
             Row {
               spacing:Style.space(6)
               Button{text:"Save";bordered:true;foreground:root.foreground;onClicked:root.submitPreferences()}
@@ -528,7 +543,7 @@ Panel {
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             PanelSectionHeader{text:"MENTIONS";foreground:root.foreground;fontFamily:root.panelFont}
             Text{visible:mentionModel.count===0;textFormat:Text.PlainText;text:"No mentions.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
-            Repeater{id:mentionRepeater;model:mentionModel;delegate:Button{required property int index;required property int thread_id;required property string actor;required property string created_at;width:parent.width;text:"@"+actor+" mentioned you  ·  "+created_at;iconText:"@";leftAlign:true;bordered:true;active:index===root.selectedMentionIndex;foreground:root.foreground;onClicked:root.openThread(thread_id)}}
+            Repeater{id:mentionRepeater;model:mentionModel;delegate:Button{required property int index;required property int thread_id;required property var reply_id;required property string actor;required property string created_at;width:parent.width;text:"@"+actor+" mentioned you  ·  "+created_at;iconText:"@";leftAlign:true;bordered:true;active:index===root.selectedMentionIndex;foreground:root.foreground;onClicked:reply_id?root.openToReply(thread_id,Number(reply_id)):root.openThread(thread_id)}}
           }
 
           Column {

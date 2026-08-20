@@ -123,6 +123,26 @@ def main() -> None:
 
             reply = call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": "Replying to @test-admin"}, member, url)
             reply_id = reply["reply_id"]
+            exact_reply = call("thread", {"thread_id": thread_id, "reply_page": 0, "reply_id": reply_id}, third, url)["thread"]
+            assert exact_reply["focus_reply_id"] == reply_id and exact_reply["reply_page"] == 1
+            assert exact_reply["notification_mode"] == "default"
+            watched = call("thread-notifications", {"thread_id": thread_id, "mode": "watch"}, third, url)
+            assert watched["mode"] == "watch"
+            assert call("threads", {"category": "projects", "query": "", "page": 1}, third, url)["threads"][0]["notification_mode"] == "watch"
+            third_prefs = call("preferences", {"action": "set", "handle": "test-third", "bio": "", "mention_notifications": False, "reply_notifications": False, "new_post_notifications": False, "desktop_notifications": True}, third, url)["preferences"]
+            assert third_prefs["reply_notifications"] is False and third_prefs["desktop_notifications"] is True
+            watched_status = call("status", None, third, url)
+            assert any(event["event_id"] == f"reply:{reply_id}" and event["deliver"] is True for event in watched_status["events"])
+            call("preferences", {"action": "set", "handle": "test-third", "bio": "", "mention_notifications": False, "reply_notifications": False, "new_post_notifications": False, "desktop_notifications": False}, third, url)
+            desktop_off = call("status", None, third, url)
+            assert not any(event["deliver"] for event in desktop_off["events"]), "the desktop master switch must suppress delivery"
+            call("preferences", {"action": "set", "handle": "test-third", "bio": "", "mention_notifications": False, "reply_notifications": False, "new_post_notifications": False, "desktop_notifications": True}, third, url)
+            call("thread-notifications", {"thread_id": thread_id, "mode": "mute"}, third, url)
+            muted_status = call("status", None, third, url)
+            assert any(event["event_id"] == f"reply:{reply_id}" and event["deliver"] is False for event in muted_status["events"])
+            call("thread-notifications", {"thread_id": thread_id, "mode": "default"}, third, url)
+            assert call("thread", {"thread_id": thread_id}, third, url)["thread"]["notification_mode"] == "default"
+            assert "invalid" in call("thread-notifications", {"thread_id": thread_id, "mode": "loud"}, third, url, ok=False)["error"].lower()
             assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, admin, url) == {"ok": True, "likes": 1, "liked": True}
             assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, member, url)["likes"] == 2
             assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, member, url)["likes"] == 2, "a user may heart only once"
@@ -135,11 +155,20 @@ def main() -> None:
             assert {"mention", "reply", "new_post"} <= {event["kind"] for event in admin_status["events"]}
             assert len([event for event in admin_status["events"] if event["actor"] == "test-member" and event["kind"] in {"mention", "reply"}]) == 1
             assert admin_status["unread"] > 0, "a reply to your post must activate unread status"
+            assert next(event for event in admin_status["events"] if event["event_id"] == f"reply:{reply_id}")["deliver"] is True
+            assert any(event["kind"] == "new_post" and event["deliver"] is False for event in admin_status["events"]), "new-post alerts default off"
+            call("thread-notifications", {"thread_id": thread_id, "mode": "mute"}, admin, url)
+            muted_admin = call("status", None, admin, url)
+            assert next(event for event in muted_admin["events"] if event["event_id"] == f"reply:{reply_id}")["deliver"] is False
+            assert muted_admin["unread"] > 0 and muted_admin["mentions"] > 0 and muted_admin["alert_mentions"] == 0, "muting must not change unread or mention history"
+            call("thread-notifications", {"thread_id": thread_id, "mode": "default"}, admin, url)
             heart_view = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
             assert heart_view["likes"] == 1 and heart_view["liked"] is True
             assert next(item for item in heart_view["replies"] if item["id"] == reply_id)["liked"] is True
             nested = call("reply", {"thread_id": thread_id, "parent_reply_id": reply_id, "body": "Nested reply"}, admin, url)
             assert nested["reply_page"] == 1
+            direct_comment_status = call("status", None, member, url)
+            assert any(event["event_id"] == f"reply:{nested['reply_id']}" and event["kind"] == "reply" and event["deliver"] is True for event in direct_comment_status["events"]), "a direct reply to your comment must notify you"
             grandchild = call("reply", {"thread_id": thread_id, "parent_reply_id": nested["reply_id"], "body": "Third-level reply"}, member, url)
             assert grandchild["reply_page"] == 1
             for index in range(20):
@@ -162,10 +191,12 @@ def main() -> None:
 
             preferences = call("preferences", {"action": "get"}, admin, url)["preferences"]
             assert preferences["handle"] == "test-admin"
+            assert preferences["mention_notifications"] is True and preferences["reply_notifications"] is True
+            assert preferences["new_post_notifications"] is False and preferences["desktop_notifications"] is True
             assert "lowercase" in call("preferences", {"action": "set", "handle": "not valid!", "bio": "", "mention_notifications": True}, admin, url, ok=False)["error"]
             collision = call("preferences", {"action": "set", "handle": "test-member", "bio": "Private encrypted bio", "mention_notifications": False}, admin, url, ok=False)
             assert collision["error"] == "Username already exists"
-            renamed = call("preferences", {"action": "set", "handle": "renamed-admin", "bio": "Private encrypted bio", "mention_notifications": False}, admin, url)
+            renamed = call("preferences", {"action": "set", "handle": "renamed-admin", "bio": "Private encrypted bio", "mention_notifications": False, "reply_notifications": True, "new_post_notifications": False, "desktop_notifications": True}, admin, url)
             assert renamed["preferences"]["handle"] == "renamed-admin"
             assert json.loads((admin / "omarchy-bbs/device.json").read_text())["handle"] == "renamed-admin"
             assert "not found" in call("profile", {"handle": "test-admin"}, member, url, ok=False)["error"].lower()

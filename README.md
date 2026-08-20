@@ -10,8 +10,8 @@ The board supports categories, properly nested reply trees, hearts with counts, 
 per-post unread state, mentions, profiles, unique editable usernames, author editing and deletion,
 reports, locks, pins, account suspension, and category moderators. The toolbar
 changes to the current theme's active color and shows an activity dot when
-you have a new mention; quieter unread activity remains visible inside the board. Omarchy notifications identify new posts, replies to
-your posts, and `@mentions`.
+you have a deliverable mention; quieter unread activity remains visible inside the board. Omarchy notifications can identify new posts,
+replies to your posts or replies, and `@mentions` according to your preferences.
 `Feedback` has its own category so suggestions do not have to live in General.
 Multiline editors grow with the text and become internally scrollable before
 they can overrun the panel. The bar reserves its accent state for mentions;
@@ -25,6 +25,7 @@ own scrolling. In a thread, Enter or `r` replies to the selected reply and `a` r
 to the original post. The reply editor opens directly beneath its target, and
 children remain grouped below the correct parent across conversation pages.
 Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
+`t` cycles the current thread through Default, Watching, and Muted notification modes.
 `0` reselects the original post. Ctrl+Enter submits every editor and Escape
 cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
 for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
@@ -51,6 +52,14 @@ checks for new activity every minute. Notifications show the other user's
 public handle and post title, but never include message content; clicking one
 opens that thread directly in the native panel. Existing activity establishes the first-run baseline,
 so installing the plugin does not produce a burst of old notifications.
+
+Global controls under Profile & Notifications independently enable desktop
+delivery, mentions, replies to your posts or comments, and new posts. Each
+thread can inherit those defaults, be watched for every reply, or be muted.
+Muted threads remain in unread lists and the Mentions screen; muting only
+suppresses bar and desktop alerts. Re-enabling a notification type never
+replays activity that happened while it was suppressed. Clicking a reply or
+mention notification opens and selects the exact reply conversation.
 
 ## Security model
 

@@ -34,6 +34,9 @@ def main() -> None:
     assert "replyComposer.parent" not in SOURCE, "reply editors must not be dynamically reparented"
     assert 'enabled: !root.replyComposerOpen && ["compose", "edit", "report", "preferences"]' in SOURCE
     assert "wheel.accepted = false" in SOURCE, "mouse-wheel events must retain native Flickable handling"
+    assert "function openToReply" in SOURCE and "focus_reply_id" in SOURCE
+    assert "Notifications: " in SOURCE and "cycleThreadNotifications" in SOURCE
+    assert all(name in SOURCE for name in ["mentionToggle", "replyToggle", "newPostToggle", "desktopToggle"])
     print("qml plain text: ok")
 
 
