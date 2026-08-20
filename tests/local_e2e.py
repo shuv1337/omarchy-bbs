@@ -101,11 +101,13 @@ def main() -> None:
 
             created = call("create", {"category": "projects", "title": "Encrypted test post", "body": "Hello @test-member — secret body"}, admin, url)
             thread_id = created["thread_id"]
+            feedback = call("create", {"category": "feedback", "title": "BBS feedback", "body": "A focused place for suggestions"}, third, url)
+            assert call("threads", {"category": "feedback", "query": "", "page": 1}, admin, url)["threads"][0]["id"] == feedback["thread_id"]
             for index in range(9):
                 call("create", {"category": "general", "title": f"Admin page fixture {index}", "body": "Pagination fixture"}, admin, url)
             for index in range(10):
                 call("create", {"category": "help", "title": f"Member page fixture {index}", "body": "Pagination fixture"}, member, url)
-            for index in range(2):
+            for index in range(1):
                 call("create", {"category": "meta", "title": f"Third page fixture {index}", "body": "Pagination fixture"}, third, url)
             first_page = call("threads", {"category": "all", "query": "", "page": 1}, third, url)
             second_page = call("threads", {"category": "all", "query": "", "page": 2}, third, url)

@@ -10,8 +10,13 @@ The board supports categories, properly nested reply trees, hearts with counts, 
 per-post unread state, mentions, profiles, unique editable usernames, author editing and deletion,
 reports, locks, pins, account suspension, and category moderators. The toolbar
 changes to the current theme's active color and shows an activity dot when
-something is waiting. Omarchy notifications identify new posts, replies to
+you have a new mention; quieter unread activity remains visible inside the board. Omarchy notifications identify new posts, replies to
 your posts, and `@mentions`.
+`Feedback` has its own category so suggestions do not have to live in General.
+Multiline editors grow with the text and become internally scrollable before
+they can overrun the panel. The bar reserves its accent state for mentions;
+other unread activity remains visible in the post list. When a newer release
+is available, the panel offers Omarchy's standard plugin update action.
 The panel itself is bounded and keyboard-first. Arrow keys or `j`/`k` move the
 visible selection, Enter opens the selected post, and Page Up/Page Down plus
 Home/End provide direct scrolling. Left/right or `h`/`l` change post or reply

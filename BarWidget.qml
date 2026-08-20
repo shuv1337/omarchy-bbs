@@ -11,6 +11,9 @@ BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
   property int unreadCount: 0
+  property int mentionCount: 0
+  property bool updateAvailable: false
+  property string latestVersion: ""
 
   function command(action) {
     if (!root.bar) return ""
@@ -27,6 +30,9 @@ BarWidget {
       statusProcess.command = [root.launcherPath, "status", "--notify"]
       statusProcess.running = true
     }
+  }
+  function installUpdate() {
+    if (root.bar) root.bar.run("omarchy plugin update io.github.thoughtlesslabs.omarchy-bbs --yes")
   }
   function injectPanel() {
     if (!panelLoader.item) return
@@ -66,7 +72,12 @@ BarWidget {
       onStreamFinished: {
         try {
           var result = JSON.parse(String(text || "{}"))
-          if (result.ok) root.unreadCount = Number(result.unread || 0)
+          if (result.ok) {
+            root.unreadCount = Number(result.unread || 0)
+            root.mentionCount = Number(result.mentions || 0)
+            root.updateAvailable = result.update_available === true
+            root.latestVersion = String(result.latest_version || "")
+          }
         } catch (e) {}
       }
     }
@@ -88,15 +99,15 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "\uf086"
-    tooltipText: root.unreadCount > 0 ? "Omarchy BBS · " + root.unreadCount + " unread" : "Open Omarchy BBS"
-    active: root.opened || root.unreadCount > 0
+    tooltipText: root.mentionCount > 0 ? "Omarchy BBS · " + root.mentionCount + " mention" + (root.mentionCount === 1 ? "" : "s") : (root.unreadCount > 0 ? "Omarchy BBS · new board activity" : "Open Omarchy BBS")
+    active: root.opened || root.mentionCount > 0
     onPressed: function(b) {
       root.toggle()
     }
   }
 
   Rectangle {
-    visible: root.unreadCount > 0
+    visible: root.mentionCount > 0
     width: Style.space(6)
     height: width
     radius: width / 2

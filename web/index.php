@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 const PROOF_WINDOW = 90;
 const PAGE_SIZE = 20;
-const CATEGORIES = ['general','projects','help','showcase','meta'];
+const CATEGORIES = ['general','projects','help','showcase','feedback','meta'];
 
 $configPath = getenv('OMARCHY_BBS_CONFIG') ?: dirname(__DIR__, 2).'/.config/omarchy-bbs.php';
 if (!is_file($configPath)) { http_response_code(503); exit('BBS is not configured.'); }
