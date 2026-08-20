@@ -93,6 +93,19 @@ Back up `~/.config/omarchy-bbs.php` separately and securely: losing its
 `app_key` makes encrypted messages unrecoverable, while disclosure of both
 that file and the database defeats the encryption.
 
+Every new account is a member, regardless of its username. Global administrator
+access can only be changed from the server command line; it is never granted by
+registration or exposed through the public API. The command also refuses to
+remove the final administrator:
+
+```bash
+php deploy/manage-admin.php /home/USER/.config/omarchy-bbs.php promote username
+php deploy/manage-admin.php /home/USER/.config/omarchy-bbs.php demote username
+```
+
+Administrators may assign narrower category-moderator permissions from the
+native panel without granting server-wide administrator access.
+
 ## Isolated local development
 
 Run the local PHP/SQLite service without touching production:

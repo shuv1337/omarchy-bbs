@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -71,6 +72,14 @@ def main() -> None:
             assert call("register", {"handle": "test-member"}, member, url)["handle"] == "test-member"
             assert call("register", {"handle": "test-third"}, third, url)["handle"] == "test-third"
             assert call("register", {"handle": "test-admin"}, duplicate, url, ok=False)["error"] == "Username already exists"
+            with sqlite3.connect(database) as connection:
+                assert connection.execute("SELECT role FROM users WHERE handle='test-admin'").fetchone()[0] == "member"
+            manage = ROOT / "deploy/manage-admin.php"
+            subprocess.run(["php", str(manage), str(config), "promote", "test-admin"], check=True, capture_output=True, text=True)
+            subprocess.run(["php", str(manage), str(config), "promote", "test-third"], check=True, capture_output=True, text=True)
+            subprocess.run(["php", str(manage), str(config), "demote", "test-third"], check=True, capture_output=True, text=True)
+            final_admin = subprocess.run(["php", str(manage), str(config), "demote", "test-admin"], capture_output=True, text=True)
+            assert final_admin.returncode != 0 and "final administrator" in final_admin.stderr
             for index in range(7):
                 assert call("register", {"handle": f"rate-user-{index}"}, temp / f"rate-{index}", url)["registered"] is True
             limited = call("register", {"handle": "rate-limited"}, temp / "rate-limited", url, ok=False)
