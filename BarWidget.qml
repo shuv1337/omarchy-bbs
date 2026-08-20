@@ -76,7 +76,7 @@ BarWidget {
     target: "omarchy.bbs"
     function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath, panel: panelLoader.item ? panelLoader.item.diagnostic() : null}) }
     function open(): void { root.open() }
-    function openThread(threadId: int): void { root.open(); if (panelLoader.item) panelLoader.item.openThread(threadId, 0) }
+    function openThread(threadId: int): void { if (panelLoader.item) panelLoader.item.openToThread(threadId) }
     function close(): void { root.close() }
     function show(): void { root.open() }
     function hide(): void { root.close() }

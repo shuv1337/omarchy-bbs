@@ -39,6 +39,7 @@ Panel {
   property int selectedReportIndex: 0
   property int replyTargetId: 0
   property string replyTargetHandle: ""
+  property bool replyComposerOpen: false
   property string editorKind: ""
   property int editorId: 0
   property string reportKind: ""
@@ -76,10 +77,11 @@ Panel {
   }
 
   function open() { root.controller.show(); refreshIdentity() }
+  function openToThread(id) { root.controller.show();if(bridge.running)queuedRequest=({action:"thread",input:JSON.stringify({thread_id:id,reply_page:0})});else openThread(id,0) }
   function close() { root.controller.hide() }
   function toggle() { root.opened ? root.close() : root.open() }
   function switchPanel(direction) { return root.bar && root.bar.switchPanelFrom ? root.bar.switchPanelFrom(root.barIdentity, direction) : false }
-  function diagnostic() { return ({screen:screen,selectedPost:selectedPostIndex,selectedReply:selectedReplyIndex,contentY:scroller.contentY,maxScroll:Math.max(0,scroller.contentHeight-scroller.height),keyFocus:keyCatcher.activeFocus,keyBlocked:keyCatcher.blocked,inputFocus:subjectField.activeFocus?"subject":composeBody.activeFocus?"post-body":replyBody.activeFocus?"reply-body":editTitle.activeFocus?"edit-title":editBody.activeFocus?"edit-body":reportReason.activeFocus?"report":searchField.activeFocus?"search":"",replyTarget:replyTargetId,replyPage:replyPage,replyPages:replyPages}) }
+  function diagnostic() { return ({screen:screen,selectedPost:selectedPostIndex,selectedReply:selectedReplyIndex,contentY:scroller.contentY,maxScroll:Math.max(0,scroller.contentHeight-scroller.height),keyFocus:keyCatcher.activeFocus,keyBlocked:keyCatcher.blocked,inputFocus:subjectField.activeFocus?"subject":composeBody.activeFocus?"post-body":replyBody.activeFocus?"reply-body":editTitle.activeFocus?"edit-title":editBody.activeFocus?"edit-body":reportReason.activeFocus?"report":searchField.activeFocus?"search":"",replyTarget:replyTargetId,replyComposerOpen:replyComposerOpen,replyPage:replyPage,replyPages:replyPages}) }
   function scrollBy(amount) { scroller.contentY = Math.max(0, Math.min(scroller.contentY + amount, Math.max(0, scroller.contentHeight - scroller.height))) }
   function ensureVisible(item) {
     if (!item) return
@@ -98,7 +100,7 @@ Panel {
   function selectedReply() { var rows=currentThread.replies||[];return selectedReplyIndex>=0&&selectedReplyIndex<rows.length?rows[selectedReplyIndex]:null }
   function activateSelection() {
     if (screen === "threads" && threadModel.count) openThread(threadModel.get(selectedPostIndex).id)
-    else if (screen === "thread") { var reply=selectedReply();if(reply)selectReplyTarget(reply.id,reply.handle);else{clearReplyTarget();replyBody.forceActiveFocus()} }
+    else if (screen === "thread") { var reply=selectedReply();if(reply)selectReplyTarget(reply.id,reply.handle,selectedReplyIndex);else startOriginalReply() }
     else if (screen === "mentions" && mentionModel.count) openThread(mentionModel.get(selectedMentionIndex).thread_id)
     else if (screen === "profile") { var activity=currentProfile.activity||[];if(activity.length)openThread(activity[selectedActivityIndex].thread_id) }
     else if (screen === "moderation" && reportModel.count) { var report=reportModel.get(selectedReportIndex);if(report.thread_id>0)openThread(report.thread_id) }
@@ -138,7 +140,7 @@ Panel {
     else if (key === "[" && screen === "threads") { categoryFilter=cycleCategory(categoryFilter==="all"?boardCategories[0]:categoryFilter,-1);currentPage=1;refreshThreads() }
     else if (key === "]" && screen === "threads") { categoryFilter=cycleCategory(categoryFilter==="all"?boardCategories[boardCategories.length-1]:categoryFilter,1);currentPage=1;refreshThreads() }
     else if ((key === "b" || key === "B") && screen !== "threads" && screen !== "onboarding") refreshThreads()
-    else if ((key === "a" || key === "A") && screen === "thread") { clearReplyTarget();replyBody.forceActiveFocus() }
+    else if ((key === "a" || key === "A") && screen === "thread") startOriginalReply()
     else if (key === "0" && screen === "thread") { selectedReplyIndex=-1;scroller.contentY=0 }
     else if (key === "r" && screen === "thread") activateSelection()
     else if (key === "H" && screen === "thread") toggleHeart()
@@ -166,8 +168,9 @@ Panel {
   function loadPreferences() { screen = "loading"; run("preferences", JSON.stringify({action: "get"})) }
   function loadMentions(markRead) { screen = "loading"; run("mentions", JSON.stringify({page: 1, mark_read: !!markRead})) }
   function loadReports() { screen = "loading"; run("moderation", JSON.stringify({action: "list_reports"})) }
-  function selectReplyTarget(id, name) { replyTargetId = id; replyTargetHandle = name; replyBody.forceActiveFocus() }
-  function clearReplyTarget() { replyTargetId = 0; replyTargetHandle = "" }
+  function startOriginalReply() { replyTargetId=0;replyTargetHandle=currentThread.handle||"";replyComposerOpen=true;replyComposer.parent=threadCardColumn;Qt.callLater(function(){replyBody.forceActiveFocus();ensureVisible(replyComposer)}) }
+  function selectReplyTarget(id, name, index) { var item=replyRepeater.itemAt(index);if(!item)return;replyTargetId=id;replyTargetHandle=name;replyComposerOpen=true;replyComposer.parent=item.composerHost;Qt.callLater(function(){replyBody.forceActiveFocus();ensureVisible(replyComposer)}) }
+  function clearReplyTarget() { replyTargetId=0;replyTargetHandle="";replyComposerOpen=false;replyBody.text="";replyComposer.parent=threadScreen }
   function prepareEdit(kind, item) {
     editorKind = kind; editorId = item.id; returnScreen = kind === "thread" ? "thread" : "thread"
     editTitle.text = kind === "thread" ? item.title : ""
@@ -202,10 +205,10 @@ Panel {
       }
       currentPage = result.page || 1; totalPages = result.pages || 1; selectedPostIndex=0;handle = result.handle || handle; screen = "threads";Qt.callLater(function(){keyCatcher.forceActiveFocus()})
     } else if (pendingAction === "thread") {
-      var item = result.thread; var replies = item.replies || []
-      for (var j = 0; j < replies.length; ++j) { replies[j].depth = replies[j].parent_reply_id ? 1 : 0;if(replies[j].likes===undefined)replies[j].likes=0;if(replies[j].liked===undefined)replies[j].liked=false }
+      clearReplyTarget();var item = result.thread; var replies = item.replies || []
+      for (var j = 0; j < replies.length; ++j) { if(replies[j].depth===undefined)replies[j].depth=replies[j].parent_reply_id?1:0;if(replies[j].likes===undefined)replies[j].likes=0;if(replies[j].liked===undefined)replies[j].liked=false }
       if(item.likes===undefined)item.likes=0;if(item.liked===undefined)item.liked=false
-      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; selectedReplyIndex=-1;clearReplyTarget(); screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){keyCatcher.forceActiveFocus()})
+      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; selectedReplyIndex=-1;screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){keyCatcher.forceActiveFocus()})
       if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
@@ -369,7 +372,7 @@ Panel {
           }
 
           Column {
-            visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
+            id:threadScreen;visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             Rectangle {
               width:parent.width;implicitHeight:threadCardColumn.implicitHeight+Style.space(18);radius:Style.cornerRadius
@@ -391,6 +394,7 @@ Panel {
             }
             PanelSectionHeader{text:"POST OPTIONS";foreground:root.foreground;fontFamily:root.panelFont}
             Flow { width:parent.width;spacing:Style.space(5)
+              Button{text:"Reply";iconText:"↩";bordered:true;foreground:root.foreground;onClicked:root.startOriginalReply()}
               Button{text:(root.currentThread.liked?"Hearted":"Heart")+" · "+(root.currentThread.likes||0);iconText:"♥";bordered:true;active:!!root.currentThread.liked;foreground:root.currentThread.liked?root.accent:root.foreground;onClicked:root.toggleHeart()}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Edit";iconText:"\uf044";bordered:true;foreground:root.foreground;onClicked:root.prepareEdit("thread",root.currentThread)}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Delete";iconText:"\uf2ed";bordered:true;foreground:root.foreground;onClicked:{root.editorKind="thread";root.run("delete",JSON.stringify({kind:"thread",id:root.currentThread.id}))}}
@@ -405,7 +409,7 @@ Panel {
               Button{text:"Next";bordered:true;foreground:root.foreground;enabled:root.replyPage<root.replyPages;onClicked:root.openThread(root.currentThread.id,root.replyPage+1)}
             }
             Repeater { id:replyRepeater;model:root.currentThread.replies||[];delegate:Rectangle{
-              required property int index;required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
+              required property int index;required property var modelData;property alias composerHost:replyColumn;x:Math.min(modelData.depth||0,6)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
               Rectangle{visible:index===root.selectedReplyIndex;width:Style.space(3);height:parent.height-Style.space(10);anchors.left:parent.left;anchors.leftMargin:Style.space(3);anchors.verticalCenter:parent.verticalCenter;radius:width/2;color:root.accent}
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
                 Row{spacing:Style.space(5);BbsChip{label:modelData.parent_handle?"REPLY TO @"+modelData.parent_handle:"REPLY";highlighted:!!modelData.parent_reply_id}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
@@ -413,20 +417,19 @@ Panel {
                 PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
                   Button{visible:!modelData.deleted;text:(modelData.liked?"Hearted":"Heart")+" · "+(modelData.likes||0);iconText:"♥";bordered:false;active:!!modelData.liked;foreground:modelData.liked?root.accent:root.foreground;onClicked:root.run("like",JSON.stringify({kind:"reply",id:modelData.id,enabled:!modelData.liked}))}
-                  Button{visible:!modelData.deleted;text:"Reply";iconText:"↩";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle)}
+                  Button{visible:!modelData.deleted;text:"Reply";iconText:"↩";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle,index)}
                   Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Edit";bordered:false;foreground:root.foreground;onClicked:root.prepareEdit("reply",modelData)}
                   Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Delete";bordered:false;foreground:root.foreground;onClicked:{root.editorKind="reply";root.run("delete",JSON.stringify({kind:"reply",id:modelData.id}))}}
                   Button{visible:!modelData.deleted;text:"Report";bordered:false;foreground:root.foreground;onClicked:root.prepareReport("reply",modelData.id)}
                 }
               }
             }}
-            Row {
-              visible:root.replyTargetId>0; spacing:Style.space(6)
-              Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"Replying to @"+root.replyTargetHandle;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
-              Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:root.clearReplyTarget()}
+            Column {
+              id:replyComposer;visible:root.replyComposerOpen&&(!root.currentThread.locked||!!root.currentThread.can_moderate);width:parent?parent.width:0;spacing:Style.space(5)
+              Row {spacing:Style.space(6);Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:root.replyTargetId?"Replying to @"+root.replyTargetHandle:"Replying to original post";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:root.clearReplyTarget()}}
+              Controls.TextArea{id:replyBody;width:parent.width;height:Math.max(Style.space(90),contentHeight+topPadding+bottomPadding);textFormat:TextEdit.PlainText;placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:{root.clearReplyTarget();keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){if((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)){root.submitReply();event.accepted=true}} background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+              Button{text:"Reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.submitReply()}
             }
-            Controls.TextArea{id:replyBody;visible:!root.currentThread.locked||!!root.currentThread.can_moderate;width:parent.width;height:Math.max(Style.space(90),contentHeight+topPadding+bottomPadding);textFormat:TextEdit.PlainText;placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:{root.clearReplyTarget();keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){if((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)){root.submitReply();event.accepted=true}} background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
-            Button{visible:replyBody.visible;text:"Reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.submitReply()}
           }
 
           Column {
