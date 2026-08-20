@@ -167,11 +167,23 @@ Item {
       if (delta > 0 && selectedPostIndex === threadModel.count-1) { scroller.contentY = Math.max(0,scroller.contentHeight-scroller.height); return }
       selectedPostIndex=Math.max(0,Math.min(threadModel.count-1,selectedPostIndex+delta));ensureVisible(postRepeater.itemAt(selectedPostIndex))
     }
-    else if (screen === "thread" && (currentThread.replies||[]).length) { selectedReplyIndex=Math.max(0,Math.min(currentThread.replies.length-1,selectedReplyIndex+delta));ensureVisible(replyRepeater.itemAt(selectedReplyIndex)) }
+    else if (screen === "thread") moveThreadSelection(delta)
     else if (screen === "mentions" && mentionModel.count) { selectedMentionIndex=Math.max(0,Math.min(mentionModel.count-1,selectedMentionIndex+delta));ensureVisible(mentionRepeater.itemAt(selectedMentionIndex)) }
     else if (screen === "profile" && (currentProfile.activity||[]).length) { selectedActivityIndex=Math.max(0,Math.min(currentProfile.activity.length-1,selectedActivityIndex+delta));ensureVisible(activityRepeater.itemAt(selectedActivityIndex)) }
     else if (screen === "moderation" && reportModel.count) { selectedReportIndex=Math.max(0,Math.min(reportModel.count-1,selectedReportIndex+delta));ensureVisible(reportRepeater.itemAt(selectedReportIndex)) }
     else scrollBy(delta*Style.space(56))
+  }
+  function moveThreadSelection(delta) {
+    var rows=currentThread.replies||[]
+    if (delta < 0) {
+      if (selectedReplyIndex < 0) { scroller.contentY=0;return }
+      selectedReplyIndex--
+      ensureVisible(selectedReplyIndex < 0 ? originalPostCard : replyRepeater.itemAt(selectedReplyIndex))
+    } else if (delta > 0) {
+      if (!rows.length || selectedReplyIndex >= rows.length-1) { scroller.contentY=Math.max(0,scroller.contentHeight-scroller.height);return }
+      selectedReplyIndex++
+      ensureVisible(replyRepeater.itemAt(selectedReplyIndex))
+    }
   }
   function selectedReply() { var rows=currentThread.replies||[];return selectedReplyIndex>=0&&selectedReplyIndex<rows.length?rows[selectedReplyIndex]:null }
   function activateSelection() {
@@ -480,6 +492,7 @@ Item {
             id:threadScreen;visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             Rectangle {
+              id:originalPostCard
               width:parent.width;implicitHeight:threadCardColumn.implicitHeight+Style.space(18);radius:Style.cornerRadius
               color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.04)
               border.width:1;border.color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.13)

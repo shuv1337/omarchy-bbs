@@ -43,6 +43,9 @@ categories, pins, and notification-mode badges stay neutral. When you have
 hearted a post, only its heart and count use the accent color.
 At the first or last post, another Up/`k` or Down/`j` reveals the true top or
 bottom of the window, so keyboard selection never traps the surrounding controls.
+Threads behave the same way: Up from the first reply reselects the original
+post, another Up/`k` reveals the window's true top, and another Down/`j` from
+the final reply reveals the true bottom and its surrounding controls.
 
 ## Screenshots
 
