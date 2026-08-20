@@ -161,10 +161,11 @@ def content_request(path: str, action: str, payload: dict) -> dict:
     return signed_request(path, content_purpose(action, payload), payload)
 
 
-def notify(title: str, message: str) -> None:
+def notify(title: str, message: str, thread_id: int = 0) -> None:
+    action = f"omarchy shell omarchy.bbs openThread {thread_id}" if thread_id > 0 else "omarchy shell omarchy.bbs open"
     try:
         subprocess.run(
-            ["omarchy", "notification", "send", "--exec", "omarchy shell omarchy.bbs open", "-g", "", title, message],
+            ["omarchy", "notification", "send", "--exec", action, "-g", "", title, message],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -208,10 +209,10 @@ def status(should_notify: bool) -> None:
     os.chmod(STATUS_FILE, 0o600)
     if should_notify and new_events:
         for event in new_events[:3]:
-            action = "mentioned you in" if event.get("kind") == "mention" else "replied to"
+            action = "mentioned you in" if event.get("kind") == "mention" else ("posted" if event.get("kind") == "new_post" else "replied to")
             actor = html.escape(str(event.get("actor", "someone")), quote=True)
             title = html.escape(str(event.get("title", "a post")), quote=True)
-            notify("Omarchy BBS", f"@{actor} {action} “{title}”.")
+            notify("Omarchy BBS", f"@{actor} {action} “{title}”.", int(event.get("thread_id", 0)))
         if len(new_events) > 3:
             notify("Omarchy BBS", f"{len(new_events) - 3} more new replies or mentions.")
     print(json.dumps({"ok": True, "registered": True, **response}))
@@ -226,6 +227,7 @@ def main() -> None:
     sub.add_parser("thread")
     sub.add_parser("create")
     sub.add_parser("reply")
+    sub.add_parser("like")
     sub.add_parser("edit")
     sub.add_parser("delete")
     sub.add_parser("report")
@@ -254,7 +256,27 @@ def main() -> None:
         item = read_input(); thread_id = int(item.get("thread_id", 0)); parent_id = int(item.get("parent_reply_id", 0)); body = str(item.get("body", "")).strip()
         payload = {"thread_id": thread_id, "parent_reply_id": parent_id, "body": body}
         print(json.dumps(content_request("/api/reply", "reply", payload)))
-    elif args.command in {"edit", "delete", "report", "profile", "preferences", "moderation"}:
+    elif args.command == "preferences":
+        item = read_input()
+        previous_handle = ""
+        if item.get("action", "get") == "set":
+            record = load_device()
+            previous_handle = record["handle"]
+            handle = str(item.get("handle", record["handle"])).lower().strip()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,30}[a-z0-9]", handle):
+                fail("Use 3–32 lowercase letters, numbers, hyphens, or underscores")
+            item["handle"] = handle
+        response = content_request("/api/preferences", "preferences", item)
+        updated_handle = response.get("handle") or response.get("preferences", {}).get("handle")
+        if previous_handle and item["handle"] != previous_handle and updated_handle != item["handle"]:
+            fail("The BBS server does not support username changes yet")
+        if updated_handle:
+            record = load_device()
+            if record["handle"] != updated_handle:
+                record["handle"] = updated_handle
+                save_device(record)
+        print(json.dumps(response))
+    elif args.command in {"like", "edit", "delete", "report", "profile", "moderation"}:
         item = read_input()
         print(json.dumps(content_request(f"/api/{args.command}", args.command, item)))
     elif args.command == "mentions":

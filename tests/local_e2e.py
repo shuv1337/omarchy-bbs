@@ -121,11 +121,21 @@ def main() -> None:
 
             reply = call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": "Replying to @test-admin"}, member, url)
             reply_id = reply["reply_id"]
+            assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, admin, url) == {"ok": True, "likes": 1, "liked": True}
+            assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, member, url)["likes"] == 2
+            assert call("like", {"kind": "thread", "id": thread_id, "enabled": True}, member, url)["likes"] == 2, "a user may heart only once"
+            assert call("like", {"kind": "thread", "id": thread_id, "enabled": False}, member, url) == {"ok": True, "likes": 1, "liked": False}
+            assert call("like", {"kind": "reply", "id": reply_id, "enabled": True}, admin, url) == {"ok": True, "likes": 1, "liked": True}
+            assert "not found" in call("like", {"kind": "reply", "id": 999999, "enabled": True}, admin, url, ok=False)["error"].lower()
+            assert call("threads", {"category": "projects", "query": "", "page": 1}, admin, url)["threads"][0]["likes"] == 1
             call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": "A reply without a tag"}, third, url)
             admin_status = call("status", None, admin, url)
-            assert {event["kind"] for event in admin_status["events"]} == {"mention", "reply"}
-            assert len([event for event in admin_status["events"] if event["actor"] == "test-member"]) == 1
+            assert {"mention", "reply", "new_post"} <= {event["kind"] for event in admin_status["events"]}
+            assert len([event for event in admin_status["events"] if event["actor"] == "test-member" and event["kind"] in {"mention", "reply"}]) == 1
             assert admin_status["unread"] > 0, "a reply to your post must activate unread status"
+            heart_view = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
+            assert heart_view["likes"] == 1 and heart_view["liked"] is True
+            assert next(item for item in heart_view["replies"] if item["id"] == reply_id)["liked"] is True
             call("reply", {"thread_id": thread_id, "parent_reply_id": reply_id, "body": "Nested reply"}, admin, url)
             for index in range(20):
                 call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": f"Reply page fixture {index}"}, admin, url)
@@ -141,8 +151,19 @@ def main() -> None:
             assert "invalid" in call("edit", {"kind": "thread", "id": thread_id, "category": "showcase", "title": "x" * 121, "body": "body"}, admin, url, ok=False)["error"].lower()
             assert "invalid" in call("edit", {"kind": "reply", "id": reply_id, "body": "x" * 8001}, member, url, ok=False)["error"].lower()
 
-            call("preferences", {"action": "set", "bio": "Private encrypted bio", "mention_notifications": False}, admin, url)
-            assert call("profile", {"handle": "test-admin"}, member, url)["profile"]["posts"] == 10
+            preferences = call("preferences", {"action": "get"}, admin, url)["preferences"]
+            assert preferences["handle"] == "test-admin"
+            assert "lowercase" in call("preferences", {"action": "set", "handle": "not valid!", "bio": "", "mention_notifications": True}, admin, url, ok=False)["error"]
+            collision = call("preferences", {"action": "set", "handle": "test-member", "bio": "Private encrypted bio", "mention_notifications": False}, admin, url, ok=False)
+            assert collision["error"] == "Username already exists"
+            renamed = call("preferences", {"action": "set", "handle": "renamed-admin", "bio": "Private encrypted bio", "mention_notifications": False}, admin, url)
+            assert renamed["preferences"]["handle"] == "renamed-admin"
+            assert json.loads((admin / "omarchy-bbs/device.json").read_text())["handle"] == "renamed-admin"
+            assert "not found" in call("profile", {"handle": "test-admin"}, member, url, ok=False)["error"].lower()
+            assert call("profile", {"handle": "renamed-admin"}, member, url)["profile"]["posts"] == 10
+            renamed_thread = call("thread", {"thread_id": thread_id, "reply_page": 1}, member, url)["thread"]
+            assert renamed_thread["handle"] == "renamed-admin"
+            assert any(item["handle"] == "renamed-admin" for item in renamed_thread["replies"])
             assert call("mentions", {"page": 1, "mark_read": False}, member, url)["mentions"]
             member_status = call("status", None, member, url)
             assert member_status["mentions"] > 0 and any(event["kind"] == "mention" for event in member_status["events"])

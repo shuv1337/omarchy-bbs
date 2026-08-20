@@ -74,8 +74,9 @@ BarWidget {
 
   IpcHandler {
     target: "omarchy.bbs"
-    function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath, panel: panelLoader.item && panelLoader.item.diagnostic ? panelLoader.item.diagnostic() : null}) }
+    function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath, panel: panelLoader.item ? panelLoader.item.diagnostic() : null}) }
     function open(): void { root.open() }
+    function openThread(threadId: int): void { root.open(); if (panelLoader.item) panelLoader.item.openThread(threadId, 0) }
     function close(): void { root.close() }
     function show(): void { root.open() }
     function hide(): void { root.close() }
@@ -92,5 +93,17 @@ BarWidget {
     onPressed: function(b) {
       root.toggle()
     }
+  }
+
+  Rectangle {
+    visible: root.unreadCount > 0
+    width: Style.space(6)
+    height: width
+    radius: width / 2
+    color: Color.accent
+    anchors.right: parent.right
+    anchors.top: parent.top
+    anchors.rightMargin: Style.space(2)
+    anchors.topMargin: Style.space(2)
   }
 }

@@ -33,11 +33,11 @@ def response(*event_ids: str, title: str = "Hello") -> dict:
     }
 
 
-def poll(value: dict, notifications: list[tuple[str, str]]) -> None:
+def poll(value: dict, notifications: list[tuple[str, str, int]]) -> None:
     with (
         mock.patch.object(client, "load_device", return_value={"device_id": "test"}),
         mock.patch.object(client, "signed_request", return_value=value),
-        mock.patch.object(client, "notify", side_effect=lambda title, body: notifications.append((title, body))),
+        mock.patch.object(client, "notify", side_effect=lambda title, body, thread_id=0: notifications.append((title, body, thread_id))),
         contextlib.redirect_stdout(io.StringIO()),
     ):
         client.status(True)
@@ -49,10 +49,12 @@ def main() -> None:
         command = run.call_args.args[0]
         assert command[:4] == ["omarchy", "notification", "send", "--exec"]
         assert command[4] == "omarchy shell omarchy.bbs open"
+        client.notify("Omarchy BBS", "Thread", 42)
+        assert run.call_args.args[0][4] == "omarchy shell omarchy.bbs openThread 42"
 
     with tempfile.TemporaryDirectory(prefix="omarchy-bbs-notifications-") as name:
         state = Path(name)
-        notifications: list[tuple[str, str]] = []
+        notifications: list[tuple[str, str, int]] = []
         with (
             mock.patch.object(client, "STATE_DIR", state),
             mock.patch.object(client, "STATUS_FILE", state / "status.json"),
@@ -64,6 +66,7 @@ def main() -> None:
 
             poll(response("mention:2", "mention:1"), notifications)
             assert len(notifications) == 1 and "@alice mentioned you" in notifications[0][1]
+            assert notifications[0][2] == 1
 
             poll(response("mention:2", "mention:1"), notifications)
             assert len(notifications) == 1, "an already-seen event must not alert twice"

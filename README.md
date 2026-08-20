@@ -6,16 +6,21 @@ It includes an Omarchy 4 bar widget, a signed device client, and a PHP/MySQL
 service. Reading, writing, and joining all happen in the themed shell panel—no
 browser tab is opened.
 
-The board supports categories, nested replies, paginated posts and replies, encrypted search,
-per-post unread state, mentions, profiles, author editing and deletion,
+The board supports categories, nested replies, hearts with counts, paginated posts and replies, encrypted search,
+per-post unread state, mentions, profiles, unique editable usernames, author editing and deletion,
 reports, locks, pins, account suspension, and category moderators. The toolbar
-changes to the current theme's active color when activity is waiting, and
-Omarchy notifications identify new replies to your posts and `@mentions`.
-The panel itself is bounded and scrollable. With the panel focused, arrow keys
-or `j`/`k` scroll, Page Up/Page Down move by a screen, Home/End jump to the
-bounds, and left/right or `h`/`l` change reply pages. Shortcuts include `n` for
-a new post, `s` for search, `m` for mentions, `p` for profile, `r` to refresh,
-and `b` to return to the post list.
+changes to the current theme's active color and shows an activity dot when
+something is waiting. Omarchy notifications identify new posts, replies to
+your posts, and `@mentions`.
+The panel itself is bounded and keyboard-first. Arrow keys or `j`/`k` move the
+visible selection, Enter opens the selected post, and Page Up/Page Down plus
+Home/End provide direct scrolling. Left/right or `h`/`l` change post or reply
+pages. In a thread, Enter or `r` replies to the selected reply and `a` replies
+to the original post. Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
+`0` reselects the original post. Ctrl+Enter submits every editor and Escape
+cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
+for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
+The panel shows the active selection and an on-screen shortcut summary.
 
 ## Requirements and boundaries
 
@@ -30,7 +35,7 @@ after the user confirms that name. The generated device credential is stored
 with mode `0600` under `$XDG_STATE_HOME/omarchy-bbs`. After joining, the widget
 checks for new activity every minute. Notifications show the other user's
 public handle and post title, but never include message content; clicking one
-opens the native panel. Existing activity establishes the first-run baseline,
+opens that thread directly in the native panel. Existing activity establishes the first-run baseline,
 so installing the plugin does not produce a burst of old notifications.
 
 ## Security model
@@ -48,6 +53,10 @@ stored outside both the database and document root. It also adds registration
 throttling, CSRF protection, strict browser security headers, HTTPS-only
 headers, rate limits, strict size limits, and durable one-time nonces. Handles
 are public and default to the hostname only after the user sees and confirms it.
+Users can later change their username from profile settings. The same 3–32
+character rules apply, and the database's unique constraint prevents an account
+from taking a username already in use. Posts and replies belong to the account,
+not a username string, so their displayed author follows a rename.
 All community-authored strings are rendered as plain text in both the native
 panel and desktop notifications; rich-text markup is never interpreted.
 
