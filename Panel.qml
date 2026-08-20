@@ -590,14 +590,17 @@ Panel {
         MouseArea {
           anchors.fill: parent
           z: 10
+          enabled: !root.replyComposerOpen && ["compose", "edit", "report", "preferences"].indexOf(root.screen) < 0
           acceptedButtons: Qt.NoButton
           propagateComposedEvents: true
           onWheel: function(wheel) {
             var pixelY = wheel.pixelDelta ? wheel.pixelDelta.y : 0
-            var angleY = wheel.angleDelta ? wheel.angleDelta.y : 0
-            var delta = pixelY !== 0 ? -pixelY * 6.0 : -angleY * 1.2
-            root.scrollBy(delta)
-            wheel.accepted = true
+            if (pixelY !== 0) {
+              root.scrollBy(-pixelY * 6.0)
+              wheel.accepted = true
+            } else {
+              wheel.accepted = false
+            }
           }
         }
       }
