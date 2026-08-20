@@ -14,6 +14,7 @@ BarWidget {
   property int mentionCount: 0
   property bool updateAvailable: false
   property string latestVersion: ""
+  property bool detached: false
 
   function command(action) {
     if (!root.bar) return ""
@@ -22,7 +23,19 @@ BarWidget {
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
   function close() { if (panelLoader.item) panelLoader.item.close() }
-  function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
+  function toggle() {
+    if (root.detached) root.reattach()
+    else if (panelLoader.item) panelLoader.item.toggle()
+  }
+  function detach() {
+    root.close()
+    root.detached = true
+    Qt.callLater(function() { detachedView.open() })
+  }
+  function reattach() {
+    root.detached = false
+    root.open()
+  }
   function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch() }
   function launch(action) { if (root.bar) root.bar.run(root.command(action)) }
   function refreshStatus() {
@@ -57,6 +70,29 @@ BarWidget {
     }
   }
 
+  FloatingWindow {
+    id: detachedWindow
+    visible: root.detached
+    title: "Omarchy BBS"
+    color: Color.background
+    implicitWidth: Style.space(760)
+    implicitHeight: Style.space(820)
+    minimumSize: Qt.size(Style.space(520), Style.space(520))
+    onVisibleChanged: if (!visible) root.detached = false
+
+    BbsView {
+      id: detachedView
+      anchors.fill: parent
+      anchors.margins: Style.space(14)
+      bar: root.bar
+      hostWidget: root
+      launcherPath: root.launcherPath
+      detached: true
+      onCloseRequested: root.detached = false
+      onReattachRequested: root.reattach()
+    }
+  }
+
   Timer {
     interval: 60000
     repeat: true
@@ -85,7 +121,7 @@ BarWidget {
 
   IpcHandler {
     target: "omarchy.bbs"
-    function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, hasBar: !!root.bar, launcher: root.launcherPath, panel: panelLoader.item ? panelLoader.item.diagnostic() : null}) }
+    function state(): string { return JSON.stringify({loaded: !!panelLoader.item, opened: root.opened, detached: root.detached, hasBar: !!root.bar, launcher: root.launcherPath, panel: root.detached ? detachedView.diagnostic() : (panelLoader.item ? panelLoader.item.diagnostic() : null)}) }
     function open(): void { root.open() }
     function openThread(threadId: int): void { if (panelLoader.item) panelLoader.item.openToThread(threadId) }
     function openReply(threadId: int, replyId: int): void { if (panelLoader.item) panelLoader.item.openToReply(threadId, replyId) }
@@ -93,6 +129,8 @@ BarWidget {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function detach(): void { root.detach() }
+    function reattach(): void { root.reattach() }
   }
 
   BarIconButton {
@@ -101,7 +139,7 @@ BarWidget {
     bar: root.bar
     text: "\uf086"
     tooltipText: root.mentionCount > 0 ? "Omarchy BBS · " + root.mentionCount + " mention" + (root.mentionCount === 1 ? "" : "s") : (root.unreadCount > 0 ? "Omarchy BBS · new board activity" : "Open Omarchy BBS")
-    active: root.opened || root.mentionCount > 0
+    active: root.opened || root.detached || root.mentionCount > 0
     onPressed: function(b) {
       root.toggle()
     }

@@ -16,7 +16,12 @@ replies to your posts or replies, and `@mentions` according to your preferences.
 Multiline editors grow with the text and become internally scrollable before
 they can overrun the panel. The bar reserves its accent state for mentions;
 other unread activity remains visible in the post list. When a newer release
-is available, the panel offers Omarchy's standard plugin update action.
+is available, the panel shows an **Update now** action that runs Omarchy's
+standard plugin updater. It does not show an update control when the installed
+release is current.
+The board can stay attached to the bar for quick visits or open as a native,
+movable window for longer sessions. The header control switches between the
+two views, and `d` performs the same action from the keyboard.
 The panel itself is bounded and keyboard-first. Arrow keys or `j`/`k` move the
 visible selection, Enter opens the selected post, and Page Up/Page Down plus
 Home/End provide direct scrolling. Left/right or `h`/`l` change post or reply
@@ -33,9 +38,9 @@ The panel shows the active selection and an on-screen shortcut summary.
 
 ## Screenshots
 
-| Browse posts | Read and join a thread |
-| --- | --- |
-| ![Omarchy BBS post list](docs/screenshots/post-list.png) | ![Omarchy BBS thread view](docs/screenshots/thread.png) |
+| Browse posts | Read and join a thread | Keep it open |
+| --- | --- | --- |
+| ![Omarchy BBS post list](docs/screenshots/post-list.png) | ![Omarchy BBS thread view](docs/screenshots/thread.png) | ![Omarchy BBS detached native window](docs/screenshots/window.png) |
 
 ## Requirements and boundaries
 

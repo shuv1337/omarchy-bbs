@@ -5,7 +5,8 @@ from pathlib import Path
 import re
 
 
-SOURCE = (Path(__file__).resolve().parents[1] / "Panel.qml").read_text()
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = (ROOT / "BbsView.qml").read_text()
 
 
 def components(pattern: str):
@@ -37,6 +38,12 @@ def main() -> None:
     assert "function openToReply" in SOURCE and "focus_reply_id" in SOURCE
     assert "Notifications: " in SOURCE and "cycleThreadNotifications" in SOURCE
     assert all(name in SOURCE for name in ["mentionToggle", "replyToggle", "newPostToggle", "desktopToggle"])
+    assert "detachRequested" in SOURCE and "reattachRequested" in SOURCE
+    wrapper = (ROOT / "Panel.qml").read_text()
+    widget = (ROOT / "BarWidget.qml").read_text()
+    assert "BbsView" in wrapper and "KeyboardPanel" in wrapper
+    assert "FloatingWindow" in widget and "function detach()" in widget and "function reattach()" in widget
+    assert "omarchy plugin update io.github.thoughtlesslabs.omarchy-bbs --yes" in widget
     print("qml plain text: ok")
 
 
