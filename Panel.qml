@@ -57,6 +57,7 @@ Panel {
     border.color: highlighted ? Qt.rgba(chipAccent.r, chipAccent.g, chipAccent.b, .55) : Qt.rgba(chipForeground.r, chipForeground.g, chipForeground.b, .14)
     Text {
       id: chipText
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: label
       color: highlighted ? chipAccent : chipForeground
@@ -173,20 +174,20 @@ Panel {
             iconComponent: Component {
               Item {
                 implicitWidth: Style.space(42); implicitHeight: Style.space(42)
-                Text { anchors.centerIn:parent; text:"\uf086"; color:root.accent; font.family:root.panelFont; font.pixelSize:Style.font.display }
+                Text { anchors.centerIn:parent; textFormat:Text.PlainText; text:"\uf086"; color:root.accent; font.family:root.panelFont; font.pixelSize:Style.font.display }
                 Rectangle { width:Style.space(6); height:width; radius:width/2; color:root.accent; anchors.right:parent.right; anchors.bottom:parent.bottom }
               }
             }
           }
           PanelSeparator { width: parent.width }
-          Text { visible: root.errorMessage!=="";width:parent.width;text:"! "+root.errorMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap }
-          Text { visible: root.noticeMessage!=="";width:parent.width;text:root.noticeMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall }
-          Text { visible: root.screen==="loading";width:parent.width;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
+          Text { visible: root.errorMessage!=="";width:parent.width;textFormat:Text.PlainText;text:"! "+root.errorMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap }
+          Text { visible: root.noticeMessage!=="";width:parent.width;textFormat:Text.PlainText;text:root.noticeMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall }
+          Text { visible: root.screen==="loading";width:parent.width;textFormat:Text.PlainText;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
 
           Column {
             visible: root.screen==="onboarding";width:parent.width;spacing:Style.space(10)
             PanelSectionHeader{text:"CHOOSE YOUR USERNAME";foreground:root.foreground;fontFamily:root.panelFont}
-            Text{width:parent.width;text:"Your hostname is suggested. This public username appears on your posts.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+            Text{width:parent.width;textFormat:Text.PlainText;text:"Your hostname is suggested. This public username appears on your posts.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
             TextField{id:handleField;width:parent.width;foreground:root.foreground;maximumLength:32;onAccepted:joinButton.clicked()}
             Button{id:joinButton;width:parent.width;text:bridge.running?"Joining…":"Join board";iconText:"\uf086";leftAlign:true;bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("register",JSON.stringify({handle:handleField.text}))}
           }
@@ -211,7 +212,7 @@ Panel {
               Button{text:"Refresh";iconText:"\uf021";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             }
             PanelSectionHeader{text:"POSTS";foreground:root.foreground;fontFamily:root.panelFont}
-            Text{visible:threadModel.count===0;width:parent.width;text:"NO POSTS FOUND.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Text{visible:threadModel.count===0;width:parent.width;textFormat:Text.PlainText;text:"NO POSTS FOUND.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Repeater { model:threadModel;delegate:Rectangle{
               required property int id;required property string category;required property string title;required property string handle;required property string created_at;required property int replies;required property bool pinned;required property bool locked;required property bool unread
               width:parent.width
@@ -229,14 +230,14 @@ Panel {
                   BbsChip{visible:pinned;label:"PINNED"}
                   BbsChip{visible:locked;label:"LOCKED"}
                 }
-                Text{width:parent.width;text:title;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;font.bold:true;wrapMode:Text.WordWrap}
-                Text{width:parent.width;text:"@"+handle+"  ·  "+replies+" repl.  ·  "+created_at;color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
+                Text{width:parent.width;textFormat:Text.PlainText;text:title;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;font.bold:true;wrapMode:Text.WordWrap}
+                Text{width:parent.width;textFormat:Text.PlainText;text:"@"+handle+"  ·  "+replies+" repl.  ·  "+created_at;color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
               }
               MouseArea{id:postMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor;onClicked:root.openThread(id)}
             }}
             Row { visible:root.totalPages>1;spacing:Style.space(6)
               Button{text:"Previous";bordered:true;foreground:root.foreground;enabled:root.currentPage>1;onClicked:{root.currentPage--;root.refreshThreads()}}
-              Text{anchors.verticalCenter:parent.verticalCenter;text:root.currentPage+" / "+root.totalPages;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+              Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:root.currentPage+" / "+root.totalPages;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
               Button{text:"Next";bordered:true;foreground:root.foreground;enabled:root.currentPage<root.totalPages;onClicked:{root.currentPage++;root.refreshThreads()}}
             }
           }
@@ -246,7 +247,7 @@ Panel {
             PanelSectionHeader{text:"NEW POST";foreground:root.foreground;fontFamily:root.panelFont}
             Flow{width:parent.width;spacing:Style.space(5);Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.composeCategory===modelData;onClicked:root.composeCategory=modelData}}}
             TextField{id:subjectField;width:parent.width;foreground:root.foreground;placeholderText:"Subject";maximumLength:120}
-            Controls.TextArea{id:composeBody;width:parent.width;height:Style.space(150);placeholderText:"Write your post";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.TextArea{id:composeBody;width:parent.width;height:Style.space(150);textFormat:TextEdit.PlainText;placeholderText:"Write your post";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Row {
               spacing:Style.space(6)
               Button{text:"Post";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("create",JSON.stringify({category:root.composeCategory,title:subjectField.text,body:composeBody.text}))}
@@ -269,10 +270,10 @@ Panel {
                   BbsChip{visible:!!root.currentThread.pinned;label:"PINNED"}
                   BbsChip{visible:!!root.currentThread.locked;label:"LOCKED"}
                 }
-                Text{width:parent.width;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
+                Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
                 Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
                 PanelSeparator{width:parent.width}
-                Text{width:parent.width;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+                Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
               }
             }
             PanelSectionHeader{text:"POST OPTIONS";foreground:root.foreground;fontFamily:root.panelFont}
@@ -288,7 +289,7 @@ Panel {
               required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
                 Row{spacing:Style.space(5);BbsChip{label:modelData.depth?"THREADED REPLY":"REPLY";highlighted:!!modelData.depth}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
-                Text{width:parent.width;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                Text{width:parent.width;textFormat:Text.PlainText;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
                 PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
                   Button{visible:!modelData.deleted;text:"Reply";iconText:"\uf3e5";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle)}
@@ -300,10 +301,10 @@ Panel {
             }}
             Row {
               visible:root.replyTargetId>0; spacing:Style.space(6)
-              Text{anchors.verticalCenter:parent.verticalCenter;text:"Replying to @"+root.replyTargetHandle;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+              Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"Replying to @"+root.replyTargetHandle;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
               Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:root.clearReplyTarget()}
             }
-            Controls.TextArea{id:replyBody;visible:!root.currentThread.locked||!!root.currentThread.can_moderate;width:parent.width;height:Style.space(90);placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.TextArea{id:replyBody;visible:!root.currentThread.locked||!!root.currentThread.can_moderate;width:parent.width;height:Style.space(90);textFormat:TextEdit.PlainText;placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Button{visible:replyBody.visible;text:"Reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("reply",JSON.stringify({thread_id:root.currentThread.id,parent_reply_id:root.replyTargetId,body:replyBody.text}))}
           }
 
@@ -312,7 +313,7 @@ Panel {
             PanelSectionHeader{text:"EDIT "+root.editorKind.toUpperCase();foreground:root.foreground;fontFamily:root.panelFont}
             Flow{visible:root.editorKind==="thread";width:parent.width;spacing:Style.space(5);Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.editCategory===modelData;onClicked:root.editCategory=modelData}}}
             TextField{id:editTitle;visible:root.editorKind==="thread";width:parent.width;foreground:root.foreground;maximumLength:120}
-            Controls.TextArea{id:editBody;width:parent.width;height:Style.space(160);wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.TextArea{id:editBody;width:parent.width;height:Style.space(160);textFormat:TextEdit.PlainText;wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Row {
               spacing:Style.space(6)
               Button{text:"Save";bordered:true;foreground:root.foreground;onClicked:{var p={kind:root.editorKind,id:root.editorId,body:editBody.text};if(root.editorKind==="thread"){p.title=editTitle.text;p.category=root.editCategory}root.run("edit",JSON.stringify(p))}}
@@ -323,8 +324,8 @@ Panel {
           Column {
             visible:root.screen==="report";width:parent.width;spacing:Style.space(8)
             PanelSectionHeader{text:"REPORT CONTENT";foreground:root.foreground;fontFamily:root.panelFont}
-            Text{width:parent.width;text:"Explain what should be reviewed by a moderator.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
-            Controls.TextArea{id:reportReason;width:parent.width;height:Style.space(120);placeholderText:"Reason";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Text{width:parent.width;textFormat:Text.PlainText;text:"Explain what should be reviewed by a moderator.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+            Controls.TextArea{id:reportReason;width:parent.width;height:Style.space(120);textFormat:TextEdit.PlainText;placeholderText:"Reason";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Row {
               spacing:Style.space(6)
               Button{text:"Submit report";bordered:true;foreground:root.foreground;onClicked:root.run("report",JSON.stringify({kind:root.reportKind,id:root.reportId,reason:reportReason.text}))}
@@ -336,9 +337,9 @@ Panel {
             visible:root.screen==="profile";width:parent.width;spacing:Style.space(8)
             Button{text:"Back";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             PanelSectionHeader{text:"@"+(root.currentProfile.handle||"");foreground:root.foreground;fontFamily:root.panelFont}
-            Text{width:parent.width;text:(root.currentProfile.role||"member").toUpperCase()+"  ·  joined "+(root.currentProfile.joined_at||"");color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap}
-            Text{width:parent.width;text:root.currentProfile.bio||"No bio yet.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
-            Text{width:parent.width;text:(root.currentProfile.posts||0)+" posts  ·  "+(root.currentProfile.replies||0)+" replies";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Text{width:parent.width;textFormat:Text.PlainText;text:(root.currentProfile.role||"member").toUpperCase()+"  ·  joined "+(root.currentProfile.joined_at||"");color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap}
+            Text{width:parent.width;textFormat:Text.PlainText;text:root.currentProfile.bio||"No bio yet.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+            Text{width:parent.width;textFormat:Text.PlainText;text:(root.currentProfile.posts||0)+" posts  ·  "+(root.currentProfile.replies||0)+" replies";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Button{visible:!!root.currentProfile.mine;text:"Edit profile & notifications";iconText:"\uf013";bordered:true;foreground:root.foreground;onClicked:root.loadPreferences()}
             Repeater{model:root.currentProfile.activity||[];delegate:Button{required property var modelData;width:parent.width;text:modelData.kind.toUpperCase()+"  ·  "+modelData.created_at;leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(modelData.thread_id)}}
           }
@@ -346,7 +347,7 @@ Panel {
           Column {
             visible:root.screen==="preferences";width:parent.width;spacing:Style.space(8)
             PanelSectionHeader{text:"PROFILE & NOTIFICATIONS";foreground:root.foreground;fontFamily:root.panelFont}
-            Controls.TextArea{id:bioField;width:parent.width;height:Style.space(110);placeholderText:"Short bio";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.TextArea{id:bioField;width:parent.width;height:Style.space(110);textFormat:TextEdit.PlainText;placeholderText:"Short bio";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
             Controls.CheckBox{id:mentionToggle;text:"Notify me about @mentions";font.family:root.panelFont;palette.windowText:root.foreground}
             Row {
               spacing:Style.space(6)
@@ -359,7 +360,7 @@ Panel {
             visible:root.screen==="mentions";width:parent.width;spacing:Style.space(7)
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             PanelSectionHeader{text:"MENTIONS";foreground:root.foreground;fontFamily:root.panelFont}
-            Text{visible:mentionModel.count===0;text:"No mentions.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Text{visible:mentionModel.count===0;textFormat:Text.PlainText;text:"No mentions.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Repeater{model:mentionModel;delegate:Button{required property int thread_id;required property string actor;required property string created_at;width:parent.width;text:"@"+actor+" mentioned you  ·  "+created_at;iconText:"@";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(thread_id)}}
           }
 
@@ -385,7 +386,7 @@ Panel {
             }
             PanelSeparator{width:parent.width}
             PanelSectionHeader{text:"OPEN REPORTS";foreground:root.foreground;fontFamily:root.panelFont}
-            Text{visible:reportModel.count===0;text:"No open reports.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Text{visible:reportModel.count===0;textFormat:Text.PlainText;text:"No open reports.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Repeater {
               model:reportModel
               delegate:Rectangle {
@@ -404,8 +405,8 @@ Panel {
                   anchors.fill:parent
                   anchors.margins:Style.space(7)
                   spacing:Style.space(5)
-                  Text{width:parent.width;text:target_kind.toUpperCase()+" #"+target_id+" reported by @"+reporter;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
-                  Text{width:parent.width;text:reason;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                  Text{width:parent.width;textFormat:Text.PlainText;text:target_kind.toUpperCase()+" #"+target_id+" reported by @"+reporter;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+                  Text{width:parent.width;textFormat:Text.PlainText;text:reason;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
                   Row {
                     spacing:Style.space(5)
                     Button{text:"Open";bordered:true;foreground:root.foreground;enabled:thread_id>0;onClicked:root.openThread(thread_id)}

@@ -43,6 +43,8 @@ stored outside both the database and document root. It also adds registration
 throttling, CSRF protection, strict browser security headers, HTTPS-only
 headers, rate limits, strict size limits, and durable one-time nonces. Handles
 are public and default to the hostname only after the user sees and confirms it.
+All community-authored strings are rendered as plain text in both the native
+panel and desktop notifications; rich-text markup is never interpreted.
 
 Click the installed discussion icon. Pick or confirm the suggested username,
 then select **Join board**. No terminal commands are required.

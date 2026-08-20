@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import hmac
+import html
 import json
 import os
 from pathlib import Path
@@ -208,7 +209,9 @@ def status(should_notify: bool) -> None:
     if should_notify and new_events:
         for event in new_events[:3]:
             action = "mentioned you in" if event.get("kind") == "mention" else "replied to"
-            notify("Omarchy BBS", f"@{event.get('actor', 'someone')} {action} “{event.get('title', 'a post')}”.")
+            actor = html.escape(str(event.get("actor", "someone")), quote=True)
+            title = html.escape(str(event.get("title", "a post")), quote=True)
+            notify("Omarchy BBS", f"@{actor} {action} “{title}”.")
         if len(new_events) > 3:
             notify("Omarchy BBS", f"{len(new_events) - 3} more new replies or mentions.")
     print(json.dumps({"ok": True, "registered": True, **response}))

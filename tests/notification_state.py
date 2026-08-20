@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import client
 
 
-def response(*event_ids: str) -> dict:
+def response(*event_ids: str, title: str = "Hello") -> dict:
     return {
         "ok": True,
         "unread": len(event_ids),
@@ -25,7 +25,7 @@ def response(*event_ids: str) -> dict:
                 "event_id": event_id,
                 "kind": "mention",
                 "actor": "alice",
-                "title": "Hello",
+                "title": title,
                 "thread_id": 1,
             }
             for event_id in event_ids
@@ -67,6 +67,10 @@ def main() -> None:
 
             poll(response("mention:2", "mention:1"), notifications)
             assert len(notifications) == 1, "an already-seen event must not alert twice"
+
+            poll(response("mention:3", "mention:2", "mention:1", title='<img src="https://example.invalid/pixel">'), notifications)
+            assert "<img" not in notifications[-1][1]
+            assert "&lt;img" in notifications[-1][1], "notification markup must be escaped"
 
     print("notification state: ok")
 
