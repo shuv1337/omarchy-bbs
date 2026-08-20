@@ -29,6 +29,9 @@ def main() -> None:
     assert text_blocks and areas
     assert all(re.search(r"textFormat\s*:\s*Text\.PlainText", block) for block in text_blocks)
     assert all(re.search(r"textFormat\s*:\s*TextEdit\.PlainText", block) for block in areas)
+    assert "component InlineReplyEditor" in SOURCE
+    assert SOURCE.count("InlineReplyEditor{") == 2, "original posts and replies must each own an inline editor"
+    assert "replyComposer.parent" not in SOURCE, "reply editors must not be dynamically reparented"
     print("qml plain text: ok")
 
 
