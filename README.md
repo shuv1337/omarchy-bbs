@@ -35,7 +35,8 @@ Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and
 `t` cycles the current thread through Default, Watching, and Muted notification modes.
 `0` reselects the original post. Ctrl+Enter submits every editor and Escape
 cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
-for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
+for mentions, `p` for profile, `r` to mark the selected list post read,
+`Shift+R` to refresh, and `b` to return to the list.
 The panel shows the active selection and an on-screen shortcut summary.
 In the post list, blue card fill, border, title, and the `NEW` badge exclusively
 mean unread activity. Keyboard selection uses only the left accent rail;

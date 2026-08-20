@@ -115,6 +115,8 @@ def main() -> None:
             assert len(second_page["threads"]) == 2
             listing = call("threads", {"category": "projects", "query": "encrypted", "page": 1}, member, url)
             assert listing["threads"][0]["unread"] is True
+            assert call("mark-read", {"thread_id": thread_id}, member, url)["thread_id"] == thread_id
+            assert call("threads", {"category": "projects", "query": "encrypted", "page": 1}, member, url)["threads"][0]["unread"] is False
             injected_search = call("threads", {"category": "all", "query": "%' OR 1=1 --", "page": 1}, member, url)
             assert injected_search["total"] == 0
             assert "not found" in call("profile", {"handle": "test-admin' OR 1=1 --"}, member, url, ok=False)["error"].lower()
@@ -207,7 +209,7 @@ def main() -> None:
             assert call("mentions", {"page": 1, "mark_read": False}, member, url)["mentions"]
             member_status = call("status", None, member, url)
             assert member_status["mentions"] > 0 and any(event["kind"] == "mention" for event in member_status["events"])
-            call("thread", {"thread_id": thread_id}, member, url)
+            call("mark-read", {"thread_id": thread_id}, member, url)
             cleared_status = call("status", None, member, url)
             assert cleared_status["mentions"] == 0 and not any(event["kind"] == "mention" for event in cleared_status["events"])
             call("report", {"kind": "thread", "id": thread_id, "reason": "Encrypted report reason"}, member, url)

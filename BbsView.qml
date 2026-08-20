@@ -206,6 +206,7 @@ Item {
   function submitPreferences() { if(!bridge.running)run("preferences",JSON.stringify({action:"set",handle:profileHandleField.text,bio:bioField.text,mention_notifications:mentionToggle.checked,reply_notifications:replyToggle.checked,new_post_notifications:newPostToggle.checked,desktop_notifications:desktopToggle.checked})) }
   function cycleThreadNotifications() { var current=String(currentThread.notification_mode||"default");var next=current==="default"?"watch":(current==="watch"?"mute":"default");run("thread-notifications",JSON.stringify({thread_id:currentThread.id,mode:next})) }
   function toggleHeart() { if(screen!=="thread")return;var reply=selectedReply();var item=reply||currentThread;if(!item||item.deleted)return;run("like",JSON.stringify({kind:reply?"reply":"thread",id:item.id,enabled:!item.liked})) }
+  function markSelectedRead() { if(screen!=="threads"||!threadModel.count)return;var item=threadModel.get(selectedPostIndex);if(item.unread)run("mark-read",JSON.stringify({thread_id:item.id})) }
   function cycleCategory(current, delta) { var index=boardCategories.indexOf(current);return boardCategories[(index+delta+boardCategories.length)%boardCategories.length] }
   function editorKey(event, kind) {
     if ((event.modifiers&Qt.AltModifier)&&(event.key===Qt.Key_Left||event.key===Qt.Key_Right)) { var delta=event.key===Qt.Key_Left?-1:1;if(kind==="compose")composeCategory=cycleCategory(composeCategory,delta);else editCategory=cycleCategory(editCategory,delta);event.accepted=true;return }
@@ -231,6 +232,7 @@ Item {
     else if ((key === "b" || key === "B") && screen !== "threads" && screen !== "onboarding") refreshThreads()
     else if ((key === "a" || key === "A") && screen === "thread") startOriginalReply()
     else if (key === "0" && screen === "thread") { selectedReplyIndex=-1;scroller.contentY=0 }
+    else if (key === "r" && screen === "threads") markSelectedRead()
     else if (key === "r" && screen === "thread") activateSelection()
     else if (key === "H" && screen === "thread") toggleHeart()
     else if ((key === "t" || key === "T") && screen === "thread") cycleThreadNotifications()
@@ -302,6 +304,14 @@ Item {
       if(item.likes===undefined)item.likes=0;if(item.liked===undefined)item.liked=false;if(item.notification_mode===undefined)item.notification_mode="default"
       focusReplyId=item.focus_reply_id||0;selectedReplyIndex=-1;for(j=0;j<replies.length;++j)if(replies[j].id===focusReplyId){selectedReplyIndex=j;break}
       item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1;screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){var target=selectedReplyIndex>=0?replyRepeater.itemAt(selectedReplyIndex):null;if(target)ensureVisible(target);keyCatcher.forceActiveFocus()})
+      if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
+    } else if (pendingAction === "mark-read") {
+      for (var readIndex=0;readIndex<threadModel.count;++readIndex) {
+        if (threadModel.get(readIndex).id === result.thread_id && threadModel.get(readIndex).unread) {
+          threadModel.setProperty(readIndex,"unread",false);visibleUnreadCount=Math.max(0,visibleUnreadCount-1);break
+        }
+      }
+      noticeMessage="Marked as read"
       if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
@@ -404,7 +414,7 @@ Item {
             visible:!!root.hostWidget&&root.hostWidget.updateAvailable;width:parent.width;implicitHeight:updateRow.implicitHeight+Style.space(12);radius:Style.cornerRadius;color:Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.10);border.width:1;border.color:Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.45)
             Row{id:updateRow;anchors.fill:parent;anchors.margins:Style.space(6);spacing:Style.space(7);Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"BBS "+(root.hostWidget?root.hostWidget.latestVersion:"")+" available";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}Button{text:"Update now";iconText:"\uf019";bordered:true;foreground:root.foreground;onClicked:root.hostWidget.installUpdate()}}
           }
-          Text { visible:root.screen==="threads";width:parent.width;textFormat:Text.PlainText;text:(threadModel.count?"POST "+(root.selectedPostIndex+1)+" OF "+threadModel.count+"  ·  ":"")+"↑↓ SELECT  ·  ENTER OPEN  ·  N NEW  ·  S SEARCH";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
+          Text { visible:root.screen==="threads";width:parent.width;textFormat:Text.PlainText;text:(threadModel.count?"POST "+(root.selectedPostIndex+1)+" OF "+threadModel.count+"  ·  ":"")+"↑↓ SELECT  ·  ENTER OPEN  ·  r READ  ·  N NEW  ·  S SEARCH";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
           Text { visible:root.screen==="thread";width:parent.width;textFormat:Text.PlainText;text:(root.selectedReplyIndex<0?"ORIGINAL POST SELECTED":"REPLY "+(root.selectedReplyIndex+1)+" OF "+(root.currentThread.replies||[]).length+" SELECTED")+"  ·  ↑↓ SELECT  ·  ENTER/R REPLY  ·  H HEART  ·  T NOTIFY  ·  A REPLY TO POST  ·  E EDIT  ·  F REPORT  ·  X DELETE  ·  ←→ PAGE";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
           Text { visible: root.screen==="loading";width:parent.width;textFormat:Text.PlainText;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
 
