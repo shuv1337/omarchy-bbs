@@ -37,6 +37,7 @@ def poll(value: dict, notifications: list[tuple[str, str, int]]) -> None:
     with (
         mock.patch.object(client, "load_device", return_value={"device_id": "test"}),
         mock.patch.object(client, "signed_request", return_value=value),
+        mock.patch.object(client, "update_status", return_value={"update_available": False, "current_version": "0.9.0", "latest_version": "0.9.0"}),
         mock.patch.object(client, "notify", side_effect=lambda title, body, thread_id=0: notifications.append((title, body, thread_id))),
         contextlib.redirect_stdout(io.StringIO()),
     ):

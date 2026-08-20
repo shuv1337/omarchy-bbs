@@ -101,11 +101,13 @@ def main() -> None:
 
             created = call("create", {"category": "projects", "title": "Encrypted test post", "body": "Hello @test-member — secret body"}, admin, url)
             thread_id = created["thread_id"]
+            feedback = call("create", {"category": "feedback", "title": "BBS feedback", "body": "A focused place for suggestions"}, third, url)
+            assert call("threads", {"category": "feedback", "query": "", "page": 1}, admin, url)["threads"][0]["id"] == feedback["thread_id"]
             for index in range(9):
                 call("create", {"category": "general", "title": f"Admin page fixture {index}", "body": "Pagination fixture"}, admin, url)
             for index in range(10):
                 call("create", {"category": "help", "title": f"Member page fixture {index}", "body": "Pagination fixture"}, member, url)
-            for index in range(2):
+            for index in range(1):
                 call("create", {"category": "meta", "title": f"Third page fixture {index}", "body": "Pagination fixture"}, third, url)
             first_page = call("threads", {"category": "all", "query": "", "page": 1}, third, url)
             second_page = call("threads", {"category": "all", "query": "", "page": 2}, third, url)
@@ -136,16 +138,23 @@ def main() -> None:
             heart_view = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
             assert heart_view["likes"] == 1 and heart_view["liked"] is True
             assert next(item for item in heart_view["replies"] if item["id"] == reply_id)["liked"] is True
-            call("reply", {"thread_id": thread_id, "parent_reply_id": reply_id, "body": "Nested reply"}, admin, url)
+            nested = call("reply", {"thread_id": thread_id, "parent_reply_id": reply_id, "body": "Nested reply"}, admin, url)
+            assert nested["reply_page"] == 1
+            grandchild = call("reply", {"thread_id": thread_id, "parent_reply_id": nested["reply_id"], "body": "Third-level reply"}, member, url)
+            assert grandchild["reply_page"] == 1
             for index in range(20):
                 call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": f"Reply page fixture {index}"}, admin, url)
             reply_page_one = call("thread", {"thread_id": thread_id, "reply_page": 1}, admin, url)["thread"]
             reply_page_two = call("thread", {"thread_id": thread_id, "reply_page": 2}, admin, url)["thread"]
             reply_latest = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
-            assert reply_page_one["reply_pages"] == 2 and len(reply_page_one["replies"]) == 20
-            assert reply_page_two["reply_page"] == 2 and len(reply_page_two["replies"]) == 3
+            assert reply_page_one["reply_pages"] == 2 and len(reply_page_one["replies"]) == 22
+            assert reply_page_two["reply_page"] == 2 and len(reply_page_two["replies"]) == 2
             assert reply_latest["reply_page"] == 2, "opening a thread should show its newest replies"
-            assert any(item["parent_handle"] == "test-member" for item in reply_page_one["replies"])
+            ordered_ids = [item["id"] for item in reply_page_one["replies"]]
+            assert ordered_ids.index(reply_id) < ordered_ids.index(nested["reply_id"]) < ordered_ids.index(grandchild["reply_id"])
+            assert next(item for item in reply_page_one["replies"] if item["id"] == reply_id)["depth"] == 0
+            assert next(item for item in reply_page_one["replies"] if item["id"] == nested["reply_id"])["depth"] == 1
+            assert next(item for item in reply_page_one["replies"] if item["id"] == grandchild["reply_id"])["depth"] == 2
             call("edit", {"kind": "thread", "id": thread_id, "category": "showcase", "title": "Edited encrypted post", "body": "Edited secret body @test-member"}, admin, url)
             call("edit", {"kind": "reply", "id": reply_id, "body": "Edited member reply"}, member, url)
             assert "invalid" in call("edit", {"kind": "thread", "id": thread_id, "category": "showcase", "title": "x" * 121, "body": "body"}, admin, url, ok=False)["error"].lower()

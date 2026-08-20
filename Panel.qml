@@ -39,6 +39,7 @@ Panel {
   property int selectedReportIndex: 0
   property int replyTargetId: 0
   property string replyTargetHandle: ""
+  property bool replyComposerOpen: false
   property string editorKind: ""
   property int editorId: 0
   property string reportKind: ""
@@ -75,11 +76,53 @@ Panel {
     }
   }
 
+  component InlineReplyEditor: Column {
+    id: inlineComposer
+    property int targetId: 0
+    property string targetHandle: ""
+    property bool active: false
+    signal cancelRequested()
+    signal submitRequested(string body)
+    visible: active
+    width: parent ? parent.width : 0
+    spacing: Style.space(5)
+    function focusEditor() { inlineBody.forceActiveFocus();root.ensureVisible(inlineComposer) }
+    onActiveChanged: {
+      if (active) Qt.callLater(focusEditor)
+      else inlineBody.clear()
+    }
+    Row {
+      spacing:Style.space(6)
+      Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:inlineComposer.targetId?"Replying to @"+inlineComposer.targetHandle:"Replying to original post";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+      Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:inlineComposer.cancelRequested()}
+    }
+    Rectangle {
+      id:editorFrame;width:parent.width;height:Math.min(Style.space(260),Math.max(Style.space(100),inlineBody.contentHeight+inlineBody.topPadding+inlineBody.bottomPadding));radius:Style.cornerRadius
+      color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.065);border.width:1;border.color:inlineBody.activeFocus?root.accent:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.38)
+      Flickable {
+        id:inlineFlick;anchors.fill:parent;anchors.margins:1;clip:true;contentWidth:width;contentHeight:Math.max(height,inlineBody.implicitHeight);boundsBehavior:Flickable.StopAtBounds
+        Controls.ScrollBar.vertical:Controls.ScrollBar{policy:Controls.ScrollBar.AsNeeded}
+        Controls.TextArea {
+          id:inlineBody;width:inlineFlick.width;height:Math.max(inlineFlick.height,implicitHeight);textFormat:TextEdit.PlainText;placeholderText:inlineComposer.targetId?"Write a threaded reply":"Write a reply";placeholderTextColor:Color.muted;wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:null
+          onCursorRectangleChanged:{if(cursorRectangle.y<inlineFlick.contentY)inlineFlick.contentY=cursorRectangle.y;else if(cursorRectangle.y+cursorRectangle.height>inlineFlick.contentY+inlineFlick.height)inlineFlick.contentY=Math.min(inlineFlick.contentHeight-inlineFlick.height,cursorRectangle.y+cursorRectangle.height-inlineFlick.height)}
+          Keys.onEscapePressed:{inlineComposer.cancelRequested();keyCatcher.forceActiveFocus()}
+          Keys.onPressed:function(event){if((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)){inlineComposer.submitRequested(inlineBody.text);event.accepted=true}}
+        }
+      }
+    }
+    Row {
+      spacing:Style.space(6)
+      Button{text:"Submit reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running&&inlineBody.text.trim()!=="";onClicked:inlineComposer.submitRequested(inlineBody.text)}
+      Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"Ctrl+Enter to submit";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption}
+    }
+  }
+
   function open() { root.controller.show(); refreshIdentity() }
+  function openToThread(id) { root.controller.show();if(bridge.running)queuedRequest=({action:"thread",input:JSON.stringify({thread_id:id,reply_page:0})});else openThread(id,0) }
   function close() { root.controller.hide() }
   function toggle() { root.opened ? root.close() : root.open() }
   function switchPanel(direction) { return root.bar && root.bar.switchPanelFrom ? root.bar.switchPanelFrom(root.barIdentity, direction) : false }
-  function diagnostic() { return ({screen:screen,selectedPost:selectedPostIndex,selectedReply:selectedReplyIndex,contentY:scroller.contentY,maxScroll:Math.max(0,scroller.contentHeight-scroller.height),keyFocus:keyCatcher.activeFocus,keyBlocked:keyCatcher.blocked,inputFocus:subjectField.activeFocus?"subject":composeBody.activeFocus?"post-body":replyBody.activeFocus?"reply-body":editTitle.activeFocus?"edit-title":editBody.activeFocus?"edit-body":reportReason.activeFocus?"report":searchField.activeFocus?"search":"",replyTarget:replyTargetId,replyPage:replyPage,replyPages:replyPages}) }
+  function diagnostic() { return ({screen:screen,selectedPost:selectedPostIndex,selectedReply:selectedReplyIndex,contentY:scroller.contentY,maxScroll:Math.max(0,scroller.contentHeight-scroller.height),keyFocus:keyCatcher.activeFocus,keyBlocked:keyCatcher.blocked,inputFocus:subjectField.activeFocus?"subject":composeBody.activeFocus?"post-body":replyComposerOpen?"reply-body":editTitle.activeFocus?"edit-title":editBody.activeFocus?"edit-body":reportReason.activeFocus?"report":searchField.activeFocus?"search":"",replyTarget:replyTargetId,replyComposerOpen:replyComposerOpen,replyPage:replyPage,replyPages:replyPages}) }
   function scrollBy(amount) { scroller.contentY = Math.max(0, Math.min(scroller.contentY + amount, Math.max(0, scroller.contentHeight - scroller.height))) }
   function ensureVisible(item) {
     if (!item) return
@@ -98,7 +141,7 @@ Panel {
   function selectedReply() { var rows=currentThread.replies||[];return selectedReplyIndex>=0&&selectedReplyIndex<rows.length?rows[selectedReplyIndex]:null }
   function activateSelection() {
     if (screen === "threads" && threadModel.count) openThread(threadModel.get(selectedPostIndex).id)
-    else if (screen === "thread") { var reply=selectedReply();if(reply)selectReplyTarget(reply.id,reply.handle);else{clearReplyTarget();replyBody.forceActiveFocus()} }
+    else if (screen === "thread") { var reply=selectedReply();if(reply)selectReplyTarget(reply.id,reply.handle,selectedReplyIndex);else startOriginalReply() }
     else if (screen === "mentions" && mentionModel.count) openThread(mentionModel.get(selectedMentionIndex).thread_id)
     else if (screen === "profile") { var activity=currentProfile.activity||[];if(activity.length)openThread(activity[selectedActivityIndex].thread_id) }
     else if (screen === "moderation" && reportModel.count) { var report=reportModel.get(selectedReportIndex);if(report.thread_id>0)openThread(report.thread_id) }
@@ -110,7 +153,7 @@ Panel {
     else if (!reply && (currentThread.mine||currentThread.can_moderate)) { editorKind="thread";run("delete",JSON.stringify({kind:"thread",id:currentThread.id})) }
   }
   function submitPost() { if(!bridge.running)run("create",JSON.stringify({category:composeCategory,title:subjectField.text,body:composeBody.text})) }
-  function submitReply() { if(!bridge.running)run("reply",JSON.stringify({thread_id:currentThread.id,parent_reply_id:replyTargetId,body:replyBody.text})) }
+  function submitReply(body, targetId) { if(!bridge.running)run("reply",JSON.stringify({thread_id:currentThread.id,parent_reply_id:targetId,body:body})) }
   function submitEdit() { var p={kind:editorKind,id:editorId,body:editBody.text};if(editorKind==="thread"){p.title=editTitle.text;p.category=editCategory}run("edit",JSON.stringify(p)) }
   function submitReport() { run("report",JSON.stringify({kind:reportKind,id:reportId,reason:reportReason.text})) }
   function submitPreferences() { if(!bridge.running)run("preferences",JSON.stringify({action:"set",handle:profileHandleField.text,bio:bioField.text,mention_notifications:mentionToggle.checked})) }
@@ -118,7 +161,7 @@ Panel {
   function cycleCategory(current, delta) { var index=boardCategories.indexOf(current);return boardCategories[(index+delta+boardCategories.length)%boardCategories.length] }
   function editorKey(event, kind) {
     if ((event.modifiers&Qt.AltModifier)&&(event.key===Qt.Key_Left||event.key===Qt.Key_Right)) { var delta=event.key===Qt.Key_Left?-1:1;if(kind==="compose")composeCategory=cycleCategory(composeCategory,delta);else editCategory=cycleCategory(editCategory,delta);event.accepted=true;return }
-    if ((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)) { if(kind==="compose")submitPost();else if(kind==="reply")submitReply();else if(kind==="edit")submitEdit();else if(kind==="report")submitReport();event.accepted=true }
+    if ((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)) { if(kind==="compose")submitPost();else if(kind==="edit")submitEdit();else if(kind==="report")submitReport();event.accepted=true }
   }
   function moderationKey(event) {
     if ((event.modifiers&Qt.AltModifier)&&(event.key===Qt.Key_Left||event.key===Qt.Key_Right)) { moderatorCategory=cycleCategory(moderatorCategory,event.key===Qt.Key_Left?-1:1);event.accepted=true }
@@ -138,7 +181,7 @@ Panel {
     else if (key === "[" && screen === "threads") { categoryFilter=cycleCategory(categoryFilter==="all"?boardCategories[0]:categoryFilter,-1);currentPage=1;refreshThreads() }
     else if (key === "]" && screen === "threads") { categoryFilter=cycleCategory(categoryFilter==="all"?boardCategories[boardCategories.length-1]:categoryFilter,1);currentPage=1;refreshThreads() }
     else if ((key === "b" || key === "B") && screen !== "threads" && screen !== "onboarding") refreshThreads()
-    else if ((key === "a" || key === "A") && screen === "thread") { clearReplyTarget();replyBody.forceActiveFocus() }
+    else if ((key === "a" || key === "A") && screen === "thread") startOriginalReply()
     else if (key === "0" && screen === "thread") { selectedReplyIndex=-1;scroller.contentY=0 }
     else if (key === "r" && screen === "thread") activateSelection()
     else if (key === "H" && screen === "thread") toggleHeart()
@@ -166,8 +209,9 @@ Panel {
   function loadPreferences() { screen = "loading"; run("preferences", JSON.stringify({action: "get"})) }
   function loadMentions(markRead) { screen = "loading"; run("mentions", JSON.stringify({page: 1, mark_read: !!markRead})) }
   function loadReports() { screen = "loading"; run("moderation", JSON.stringify({action: "list_reports"})) }
-  function selectReplyTarget(id, name) { replyTargetId = id; replyTargetHandle = name; replyBody.forceActiveFocus() }
-  function clearReplyTarget() { replyTargetId = 0; replyTargetHandle = "" }
+  function startOriginalReply() { replyTargetId=0;replyTargetHandle=currentThread.handle||"";replyComposerOpen=true;Qt.callLater(function(){originalReplyEditor.focusEditor()}) }
+  function selectReplyTarget(id, name, index) { var item=replyRepeater.itemAt(index);if(!item)return;replyTargetId=id;replyTargetHandle=name;replyComposerOpen=true;Qt.callLater(function(){item.focusComposer()}) }
+  function clearReplyTarget() { replyTargetId=0;replyTargetHandle="";replyComposerOpen=false }
   function prepareEdit(kind, item) {
     editorKind = kind; editorId = item.id; returnScreen = kind === "thread" ? "thread" : "thread"
     editTitle.text = kind === "thread" ? item.title : ""
@@ -202,15 +246,15 @@ Panel {
       }
       currentPage = result.page || 1; totalPages = result.pages || 1; selectedPostIndex=0;handle = result.handle || handle; screen = "threads";Qt.callLater(function(){keyCatcher.forceActiveFocus()})
     } else if (pendingAction === "thread") {
-      var item = result.thread; var replies = item.replies || []
-      for (var j = 0; j < replies.length; ++j) { replies[j].depth = replies[j].parent_reply_id ? 1 : 0;if(replies[j].likes===undefined)replies[j].likes=0;if(replies[j].liked===undefined)replies[j].liked=false }
+      clearReplyTarget();var item = result.thread; var replies = item.replies || []
+      for (var j = 0; j < replies.length; ++j) { if(replies[j].depth===undefined)replies[j].depth=replies[j].parent_reply_id?1:0;if(replies[j].likes===undefined)replies[j].likes=0;if(replies[j].liked===undefined)replies[j].liked=false }
       if(item.likes===undefined)item.likes=0;if(item.liked===undefined)item.liked=false
-      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; selectedReplyIndex=-1;clearReplyTarget(); screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){keyCatcher.forceActiveFocus()})
+      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; selectedReplyIndex=-1;screen = "thread"; scroller.contentY = 0;Qt.callLater(function(){keyCatcher.forceActiveFocus()})
       if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
-      replyBody.text = ""; noticeMessage = "Reply added"; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id, reply_page: result.reply_page || 0}))
+      clearReplyTarget(); noticeMessage = "Reply added"; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id, reply_page: result.reply_page || 0}))
     } else if (pendingAction === "like") afterMutation(result.liked?"Heart added":"Heart removed")
     else if (pendingAction === "edit") afterMutation("Changes saved")
     else if (pendingAction === "delete") {
@@ -260,7 +304,7 @@ Panel {
       }
       PanelKeyCatcher {
         id: keyCatcher; anchors.fill: parent
-        blocked: handleField.activeFocus || searchField.activeFocus || subjectField.activeFocus || composeBody.activeFocus || replyBody.activeFocus || editTitle.activeFocus || editBody.activeFocus || reportReason.activeFocus || profileHandleField.activeFocus || bioField.activeFocus || moderationHandle.activeFocus || suspensionHours.activeFocus
+        blocked: handleField.activeFocus || searchField.activeFocus || subjectField.activeFocus || composeBody.activeFocus || root.replyComposerOpen || editTitle.activeFocus || editBody.activeFocus || reportReason.activeFocus || profileHandleField.activeFocus || bioField.activeFocus || moderationHandle.activeFocus || suspensionHours.activeFocus
         onMoveRequested: function(dx, dy) {
           if (dy !== 0) root.moveSelection(dy)
           else if (root.screen === "threads" && dx < 0 && root.currentPage > 1) { root.currentPage--;root.refreshThreads() }
@@ -291,6 +335,10 @@ Panel {
           PanelSeparator { width: parent.width }
           Text { visible: root.errorMessage!=="";width:parent.width;textFormat:Text.PlainText;text:"! "+root.errorMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap }
           Text { visible: root.noticeMessage!=="";width:parent.width;textFormat:Text.PlainText;text:root.noticeMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall }
+          Rectangle {
+            visible:!!root.hostWidget&&root.hostWidget.updateAvailable;width:parent.width;implicitHeight:updateRow.implicitHeight+Style.space(12);radius:Style.cornerRadius;color:Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.10);border.width:1;border.color:Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.45)
+            Row{id:updateRow;anchors.fill:parent;anchors.margins:Style.space(6);spacing:Style.space(7);Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"BBS "+(root.hostWidget?root.hostWidget.latestVersion:"")+" available";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}Button{text:"Update now";iconText:"\uf019";bordered:true;foreground:root.foreground;onClicked:root.hostWidget.installUpdate()}}
+          }
           Text { visible:root.screen==="threads";width:parent.width;textFormat:Text.PlainText;text:(threadModel.count?"POST "+(root.selectedPostIndex+1)+" OF "+threadModel.count+"  ·  ":"")+"↑↓ SELECT  ·  ENTER OPEN  ·  N NEW  ·  S SEARCH";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
           Text { visible:root.screen==="thread";width:parent.width;textFormat:Text.PlainText;text:(root.selectedReplyIndex<0?"ORIGINAL POST SELECTED":"REPLY "+(root.selectedReplyIndex+1)+" OF "+(root.currentThread.replies||[]).length+" SELECTED")+"  ·  ↑↓ SELECT  ·  ENTER/R REPLY  ·  H HEART  ·  A REPLY TO POST  ·  E EDIT  ·  F REPORT  ·  X DELETE  ·  ←→ PAGE";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap }
           Text { visible: root.screen==="loading";width:parent.width;textFormat:Text.PlainText;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
@@ -360,7 +408,7 @@ Panel {
             PanelSectionHeader{text:"NEW POST";foreground:root.foreground;fontFamily:root.panelFont}
             Flow{width:parent.width;spacing:Style.space(5);Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.composeCategory===modelData;onClicked:root.composeCategory=modelData}}}
             TextField{id:subjectField;width:parent.width;foreground:root.foreground;placeholderText:"Subject";maximumLength:120;Keys.onEscapePressed:{root.screen="threads";keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){root.editorKey(event,"compose")}}
-            Controls.TextArea{id:composeBody;width:parent.width;height:Math.max(Style.space(150),contentHeight+topPadding+bottomPadding);textFormat:TextEdit.PlainText;placeholderText:"Write your post";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:{root.screen="threads";keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){root.editorKey(event,"compose")} background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.ScrollView{id:composeScroll;width:parent.width;height:Math.min(Style.space(300),Math.max(Style.space(150),composeBody.contentHeight+composeBody.topPadding+composeBody.bottomPadding));clip:true;Controls.ScrollBar.vertical.policy:Controls.ScrollBar.AsNeeded;Controls.TextArea{id:composeBody;width:composeScroll.availableWidth;textFormat:TextEdit.PlainText;placeholderText:"Write your post";placeholderTextColor:Color.muted;wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:{root.screen="threads";keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){root.editorKey(event,"compose")} background:Rectangle{color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.055);border.width:1;border.color:composeBody.activeFocus?root.accent:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.32);radius:Style.cornerRadius}}}
             Row {
               spacing:Style.space(6)
               Button{text:"Post";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.submitPost()}
@@ -369,7 +417,7 @@ Panel {
           }
 
           Column {
-            visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
+            id:threadScreen;visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             Rectangle {
               width:parent.width;implicitHeight:threadCardColumn.implicitHeight+Style.space(18);radius:Style.cornerRadius
@@ -387,10 +435,12 @@ Panel {
                 Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
                 PanelSeparator{width:parent.width}
                 Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+                InlineReplyEditor{id:originalReplyEditor;active:root.replyComposerOpen&&root.replyTargetId===0&&(!root.currentThread.locked||!!root.currentThread.can_moderate);targetId:0;targetHandle:root.currentThread.handle||"";onCancelRequested:root.clearReplyTarget();onSubmitRequested:function(body){root.submitReply(body,0)}}
               }
             }
             PanelSectionHeader{text:"POST OPTIONS";foreground:root.foreground;fontFamily:root.panelFont}
             Flow { width:parent.width;spacing:Style.space(5)
+              Button{text:"Reply";iconText:"↩";bordered:true;foreground:root.foreground;onClicked:root.startOriginalReply()}
               Button{text:(root.currentThread.liked?"Hearted":"Heart")+" · "+(root.currentThread.likes||0);iconText:"♥";bordered:true;active:!!root.currentThread.liked;foreground:root.currentThread.liked?root.accent:root.foreground;onClicked:root.toggleHeart()}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Edit";iconText:"\uf044";bordered:true;foreground:root.foreground;onClicked:root.prepareEdit("thread",root.currentThread)}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Delete";iconText:"\uf2ed";bordered:true;foreground:root.foreground;onClicked:{root.editorKind="thread";root.run("delete",JSON.stringify({kind:"thread",id:root.currentThread.id}))}}
@@ -405,7 +455,7 @@ Panel {
               Button{text:"Next";bordered:true;foreground:root.foreground;enabled:root.replyPage<root.replyPages;onClicked:root.openThread(root.currentThread.id,root.replyPage+1)}
             }
             Repeater { id:replyRepeater;model:root.currentThread.replies||[];delegate:Rectangle{
-              required property int index;required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
+              required property int index;required property var modelData;function focusComposer(){inlineReplyEditor.focusEditor()} x:Math.min(modelData.depth||0,6)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
               Rectangle{visible:index===root.selectedReplyIndex;width:Style.space(3);height:parent.height-Style.space(10);anchors.left:parent.left;anchors.leftMargin:Style.space(3);anchors.verticalCenter:parent.verticalCenter;radius:width/2;color:root.accent}
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
                 Row{spacing:Style.space(5);BbsChip{label:modelData.parent_handle?"REPLY TO @"+modelData.parent_handle:"REPLY";highlighted:!!modelData.parent_reply_id}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
@@ -413,20 +463,14 @@ Panel {
                 PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
                   Button{visible:!modelData.deleted;text:(modelData.liked?"Hearted":"Heart")+" · "+(modelData.likes||0);iconText:"♥";bordered:false;active:!!modelData.liked;foreground:modelData.liked?root.accent:root.foreground;onClicked:root.run("like",JSON.stringify({kind:"reply",id:modelData.id,enabled:!modelData.liked}))}
-                  Button{visible:!modelData.deleted;text:"Reply";iconText:"↩";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle)}
+                  Button{visible:!modelData.deleted;text:"Reply";iconText:"↩";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle,index)}
                   Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Edit";bordered:false;foreground:root.foreground;onClicked:root.prepareEdit("reply",modelData)}
                   Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Delete";bordered:false;foreground:root.foreground;onClicked:{root.editorKind="reply";root.run("delete",JSON.stringify({kind:"reply",id:modelData.id}))}}
                   Button{visible:!modelData.deleted;text:"Report";bordered:false;foreground:root.foreground;onClicked:root.prepareReport("reply",modelData.id)}
                 }
+                InlineReplyEditor{id:inlineReplyEditor;active:root.replyComposerOpen&&root.replyTargetId===modelData.id&&(!root.currentThread.locked||!!root.currentThread.can_moderate);targetId:modelData.id;targetHandle:modelData.handle;onCancelRequested:root.clearReplyTarget();onSubmitRequested:function(body){root.submitReply(body,modelData.id)}}
               }
             }}
-            Row {
-              visible:root.replyTargetId>0; spacing:Style.space(6)
-              Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"Replying to @"+root.replyTargetHandle;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
-              Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:root.clearReplyTarget()}
-            }
-            Controls.TextArea{id:replyBody;visible:!root.currentThread.locked||!!root.currentThread.can_moderate;width:parent.width;height:Math.max(Style.space(90),contentHeight+topPadding+bottomPadding);textFormat:TextEdit.PlainText;placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;Keys.onEscapePressed:{root.clearReplyTarget();keyCatcher.forceActiveFocus()} Keys.onPressed:function(event){if((event.modifiers&Qt.ControlModifier)&&(event.key===Qt.Key_Return||event.key===Qt.Key_Enter)){root.submitReply();event.accepted=true}} background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
-            Button{visible:replyBody.visible;text:"Reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.submitReply()}
           }
 
           Column {

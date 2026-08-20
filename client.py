@@ -26,6 +26,9 @@ STATE_DIR = STATE_ROOT / ("omarchy-bbs-local" if DEV_MODE else "omarchy-bbs")
 CONFIG_FILE = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy-bbs/config.json"
 DEVICE_FILE = STATE_DIR / "device.json"
 STATUS_FILE = STATE_DIR / "status.json"
+UPDATE_FILE = STATE_DIR / "update.json"
+UPDATE_CHECK_SECONDS = 6 * 60 * 60
+LATEST_RELEASE_URL = "https://api.github.com/repos/thoughtlesslabs/omarchy-bbs/releases/latest"
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -88,6 +91,50 @@ def request_json(path: str, payload: dict) -> dict:
         fail(str(message))
     except urllib.error.URLError as exc:
         fail(f"Could not reach the BBS: {exc.reason}")
+
+
+def version_parts(value: str) -> tuple[int, ...]:
+    match = re.search(r"(?:^|v)(\d+(?:\.\d+)+)", value.strip(), re.IGNORECASE)
+    return tuple(int(part) for part in match.group(1).split(".")) if match else ()
+
+
+def installed_plugin_version() -> str:
+    try:
+        return str(json.loads((PLUGIN_DIR / "manifest.json").read_text()).get("version", "0.0.0"))
+    except (OSError, json.JSONDecodeError):
+        return "0.0.0"
+
+
+def update_status() -> dict:
+    current = installed_plugin_version()
+    if DEV_MODE:
+        return {"update_available": False, "current_version": current, "latest_version": current}
+    try:
+        cached = json.loads(UPDATE_FILE.read_text())
+        if time.time() - float(cached.get("checked_at", 0)) < UPDATE_CHECK_SECONDS:
+            return cached
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    latest = current
+    try:
+        request = urllib.request.Request(
+            LATEST_RELEASE_URL,
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "Omarchy-BBS/1"},
+        )
+        with urllib.request.urlopen(request, timeout=8) as response:
+            latest = str(json.load(response).get("tag_name", current)).lstrip("vV")
+    except (OSError, ValueError, urllib.error.URLError, json.JSONDecodeError):
+        pass
+    value = {
+        "update_available": bool(version_parts(latest) > version_parts(current)),
+        "current_version": current,
+        "latest_version": latest,
+        "checked_at": int(time.time()),
+    }
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    UPDATE_FILE.write_text(json.dumps(value, indent=2) + "\n")
+    os.chmod(UPDATE_FILE, 0o600)
+    return value
 
 
 def suggested_handle() -> str:
@@ -188,6 +235,7 @@ def status(should_notify: bool) -> None:
         print(json.dumps({"ok": True, "registered": False, "unread": 0}))
         return
     response = signed_request("/api/status", "status")
+    update = update_status()
     try:
         previous_state = json.loads(STATUS_FILE.read_text())
     except (OSError, json.JSONDecodeError):
@@ -215,7 +263,12 @@ def status(should_notify: bool) -> None:
             notify("Omarchy BBS", f"@{actor} {action} “{title}”.", int(event.get("thread_id", 0)))
         if len(new_events) > 3:
             notify("Omarchy BBS", f"{len(new_events) - 3} more new replies or mentions.")
-    print(json.dumps({"ok": True, "registered": True, **response}))
+    if should_notify and update["update_available"] and previous_state.get("notified_update") != update["latest_version"]:
+        notify("Omarchy BBS update available", f"Version {update['latest_version']} is ready. Open the BBS to update.")
+        stored["notified_update"] = update["latest_version"]
+        STATUS_FILE.write_text(json.dumps(stored, indent=2) + "\n")
+        os.chmod(STATUS_FILE, 0o600)
+    print(json.dumps({"ok": True, "registered": True, **response, **update}))
 
 
 def main() -> None:

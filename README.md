@@ -6,17 +6,24 @@ It includes an Omarchy 4 bar widget, a signed device client, and a PHP/MySQL
 service. Reading, writing, and joining all happen in the themed shell panel—no
 browser tab is opened.
 
-The board supports categories, nested replies, hearts with counts, paginated posts and replies, encrypted search,
+The board supports categories, properly nested reply trees, hearts with counts, paginated posts and reply conversations, encrypted search,
 per-post unread state, mentions, profiles, unique editable usernames, author editing and deletion,
 reports, locks, pins, account suspension, and category moderators. The toolbar
 changes to the current theme's active color and shows an activity dot when
-something is waiting. Omarchy notifications identify new posts, replies to
+you have a new mention; quieter unread activity remains visible inside the board. Omarchy notifications identify new posts, replies to
 your posts, and `@mentions`.
+`Feedback` has its own category so suggestions do not have to live in General.
+Multiline editors grow with the text and become internally scrollable before
+they can overrun the panel. The bar reserves its accent state for mentions;
+other unread activity remains visible in the post list. When a newer release
+is available, the panel offers Omarchy's standard plugin update action.
 The panel itself is bounded and keyboard-first. Arrow keys or `j`/`k` move the
 visible selection, Enter opens the selected post, and Page Up/Page Down plus
 Home/End provide direct scrolling. Left/right or `h`/`l` change post or reply
 pages. In a thread, Enter or `r` replies to the selected reply and `a` replies
-to the original post. Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
+to the original post. The reply editor opens directly beneath its target, and
+children remain grouped below the correct parent across conversation pages.
+Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
 `0` reselects the original post. Ctrl+Enter submits every editor and Escape
 cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
 for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
