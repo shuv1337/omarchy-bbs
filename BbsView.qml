@@ -162,7 +162,11 @@ Item {
     else if (point.y + item.height > scroller.contentY + scroller.height-margin) scroller.contentY = Math.min(Math.max(0,scroller.contentHeight-scroller.height), point.y+item.height-scroller.height+margin)
   }
   function moveSelection(delta) {
-    if (screen === "threads" && threadModel.count) { selectedPostIndex=Math.max(0,Math.min(threadModel.count-1,selectedPostIndex+delta));ensureVisible(postRepeater.itemAt(selectedPostIndex)) }
+    if (screen === "threads" && threadModel.count) {
+      if (delta < 0 && selectedPostIndex === 0) { scroller.contentY = 0; return }
+      if (delta > 0 && selectedPostIndex === threadModel.count-1) { scroller.contentY = Math.max(0,scroller.contentHeight-scroller.height); return }
+      selectedPostIndex=Math.max(0,Math.min(threadModel.count-1,selectedPostIndex+delta));ensureVisible(postRepeater.itemAt(selectedPostIndex))
+    }
     else if (screen === "thread" && (currentThread.replies||[]).length) { selectedReplyIndex=Math.max(0,Math.min(currentThread.replies.length-1,selectedReplyIndex+delta));ensureVisible(replyRepeater.itemAt(selectedReplyIndex)) }
     else if (screen === "mentions" && mentionModel.count) { selectedMentionIndex=Math.max(0,Math.min(mentionModel.count-1,selectedMentionIndex+delta));ensureVisible(mentionRepeater.itemAt(selectedMentionIndex)) }
     else if (screen === "profile" && (currentProfile.activity||[]).length) { selectedActivityIndex=Math.max(0,Math.min(currentProfile.activity.length-1,selectedActivityIndex+delta));ensureVisible(activityRepeater.itemAt(selectedActivityIndex)) }

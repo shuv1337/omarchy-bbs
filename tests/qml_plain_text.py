@@ -47,6 +47,8 @@ def main() -> None:
     assert 'BbsChip{label:category.toUpperCase();highlighted:true}' not in SOURCE
     assert 'id:postHeartMeta' in SOURCE and 'color:liked?root.accent:Color.muted' in SOURCE
     assert 'color:postMouse.containsMouse?Style.hoverFillFor' not in SOURCE
+    assert 'delta < 0 && selectedPostIndex === 0' in SOURCE
+    assert 'delta > 0 && selectedPostIndex === threadModel.count-1' in SOURCE
     wrapper = (ROOT / "Panel.qml").read_text()
     widget = (ROOT / "BarWidget.qml").read_text()
     assert "BbsView" in wrapper and "KeyboardPanel" in wrapper

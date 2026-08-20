@@ -41,6 +41,8 @@ In the post list, blue card fill, border, title, and the `NEW` badge exclusively
 mean unread activity. Keyboard selection uses only the left accent rail;
 categories, pins, and notification-mode badges stay neutral. When you have
 hearted a post, only its heart and count use the accent color.
+At the first or last post, another Up/`k` or Down/`j` reveals the true top or
+bottom of the window, so keyboard selection never traps the surrounding controls.
 
 ## Screenshots
 
