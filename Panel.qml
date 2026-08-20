@@ -587,6 +587,22 @@ Panel {
             }
           }
         }
+        MouseArea {
+          anchors.fill: parent
+          z: 10
+          enabled: !root.replyComposerOpen && ["compose", "edit", "report", "preferences"].indexOf(root.screen) < 0
+          acceptedButtons: Qt.NoButton
+          propagateComposedEvents: true
+          onWheel: function(wheel) {
+            var pixelY = wheel.pixelDelta ? wheel.pixelDelta.y : 0
+            if (pixelY !== 0) {
+              root.scrollBy(-pixelY * 6.0)
+              wheel.accepted = true
+            } else {
+              wheel.accepted = false
+            }
+          }
+        }
       }
       }
     }

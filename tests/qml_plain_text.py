@@ -32,6 +32,8 @@ def main() -> None:
     assert "component InlineReplyEditor" in SOURCE
     assert SOURCE.count("InlineReplyEditor{") == 2, "original posts and replies must each own an inline editor"
     assert "replyComposer.parent" not in SOURCE, "reply editors must not be dynamically reparented"
+    assert 'enabled: !root.replyComposerOpen && ["compose", "edit", "report", "preferences"]' in SOURCE
+    assert "wheel.accepted = false" in SOURCE, "mouse-wheel events must retain native Flickable handling"
     print("qml plain text: ok")
 
 
