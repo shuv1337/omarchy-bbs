@@ -30,6 +30,12 @@ cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
 for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
 The panel shows the active selection and an on-screen shortcut summary.
 
+## Screenshots
+
+| Browse posts | Read and join a thread |
+| --- | --- |
+| ![Omarchy BBS post list](docs/screenshots/post-list.png) | ![Omarchy BBS thread view](docs/screenshots/thread.png) |
+
 ## Requirements and boundaries
 
 - Omarchy Quattro (4.x) with its Quickshell-based plugin runtime
