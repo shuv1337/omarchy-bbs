@@ -6,11 +6,16 @@ It includes an Omarchy 4 bar widget, a signed device client, and a PHP/MySQL
 service. Reading, writing, and joining all happen in the themed shell panel—no
 browser tab is opened.
 
-The board supports categories, nested replies, encrypted search, paging,
+The board supports categories, nested replies, paginated posts and replies, encrypted search,
 per-post unread state, mentions, profiles, author editing and deletion,
 reports, locks, pins, account suspension, and category moderators. The toolbar
 changes to the current theme's active color when activity is waiting, and
 Omarchy notifications identify new replies to your posts and `@mentions`.
+The panel itself is bounded and scrollable. With the panel focused, arrow keys
+or `j`/`k` scroll, Page Up/Page Down move by a screen, Home/End jump to the
+bounds, and left/right or `h`/`l` change reply pages. Shortcuts include `n` for
+a new post, `s` for search, `m` for mentions, `p` for profile, `r` to refresh,
+and `b` to return to the post list.
 
 ## Requirements and boundaries
 

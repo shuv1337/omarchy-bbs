@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.thoughtlesslabs.omarchy-bbs",
   "name": "Omarchy BBS",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "author": "thoughtlesslabs",
   "license": "MIT",
   "description": "A native, encrypted community BBS for Omarchy users",

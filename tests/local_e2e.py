@@ -127,6 +127,15 @@ def main() -> None:
             assert len([event for event in admin_status["events"] if event["actor"] == "test-member"]) == 1
             assert admin_status["unread"] > 0, "a reply to your post must activate unread status"
             call("reply", {"thread_id": thread_id, "parent_reply_id": reply_id, "body": "Nested reply"}, admin, url)
+            for index in range(20):
+                call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": f"Reply page fixture {index}"}, admin, url)
+            reply_page_one = call("thread", {"thread_id": thread_id, "reply_page": 1}, admin, url)["thread"]
+            reply_page_two = call("thread", {"thread_id": thread_id, "reply_page": 2}, admin, url)["thread"]
+            reply_latest = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
+            assert reply_page_one["reply_pages"] == 2 and len(reply_page_one["replies"]) == 20
+            assert reply_page_two["reply_page"] == 2 and len(reply_page_two["replies"]) == 3
+            assert reply_latest["reply_page"] == 2, "opening a thread should show its newest replies"
+            assert any(item["parent_handle"] == "test-member" for item in reply_page_one["replies"])
             call("edit", {"kind": "thread", "id": thread_id, "category": "showcase", "title": "Edited encrypted post", "body": "Edited secret body @test-member"}, admin, url)
             call("edit", {"kind": "reply", "id": reply_id, "body": "Edited member reply"}, member, url)
             assert "invalid" in call("edit", {"kind": "thread", "id": thread_id, "category": "showcase", "title": "x" * 121, "body": "body"}, admin, url, ok=False)["error"].lower()
@@ -153,7 +162,7 @@ def main() -> None:
             assert "suspended" in call("reply", {"thread_id": thread_id, "parent_reply_id": 0, "body": "blocked"}, member, url, ok=False)["error"].lower()
             call("moderation", {"action": "suspend", "handle": "test-member", "hours": 0}, admin, url)
             call("delete", {"kind": "reply", "id": reply_id}, member, url)
-            thread = call("thread", {"thread_id": thread_id}, admin, url)["thread"]
+            thread = call("thread", {"thread_id": thread_id, "reply_page": 1}, admin, url)["thread"]
             assert any(item["deleted"] for item in thread["replies"])
 
             raw = database.read_bytes()

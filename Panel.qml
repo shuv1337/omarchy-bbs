@@ -29,6 +29,8 @@ Panel {
   property string composeCategory: "general"
   property int currentPage: 1
   property int totalPages: 1
+  property int replyPage: 1
+  property int replyPages: 1
   property int replyTargetId: 0
   property string replyTargetHandle: ""
   property string editorKind: ""
@@ -71,6 +73,15 @@ Panel {
   function close() { root.controller.hide() }
   function toggle() { root.opened ? root.close() : root.open() }
   function switchPanel(direction) { return root.bar && root.bar.switchPanelFrom ? root.bar.switchPanelFrom(root.barIdentity, direction) : false }
+  function scrollBy(amount) { scroller.contentY = Math.max(0, Math.min(scroller.contentY + amount, Math.max(0, scroller.contentHeight - scroller.height))) }
+  function handleShortcut(key) {
+    if (key === "r" || key === "R") { if (screen === "thread") openThread(currentThread.id, replyPage); else refreshThreads() }
+    else if ((key === "n" || key === "N") && handle) screen = "compose"
+    else if ((key === "m" || key === "M") && handle) loadMentions(true)
+    else if ((key === "p" || key === "P") && handle) loadProfile(handle)
+    else if ((key === "s" || key === "S") && screen === "threads") searchField.forceActiveFocus()
+    else if ((key === "b" || key === "B") && screen !== "threads" && screen !== "onboarding") refreshThreads()
+  }
   function run(action, input) {
     if (bridge.running || launcherPath === "") return
     errorMessage = ""; noticeMessage = ""; pendingAction = action; pendingInput = input || ""
@@ -82,7 +93,7 @@ Panel {
   }
   function refreshIdentity() { screen = "loading"; run("identity", "") }
   function refreshThreads() { screen = "loading"; run("threads", JSON.stringify({query: searchField.text, category: categoryFilter, page: currentPage})) }
-  function openThread(id) { screen = "loading"; run("thread", JSON.stringify({thread_id: id})) }
+  function openThread(id, page) { screen = "loading"; run("thread", JSON.stringify({thread_id: id, reply_page: page || 0})) }
   function loadProfile(name) { screen = "loading"; run("profile", JSON.stringify({handle: name || handle})) }
   function loadPreferences() { screen = "loading"; run("preferences", JSON.stringify({action: "get"})) }
   function loadMentions(markRead) { screen = "loading"; run("mentions", JSON.stringify({page: 1, mark_read: !!markRead})) }
@@ -98,7 +109,7 @@ Panel {
   }
   property string editCategory: "general"
   function prepareReport(kind, id) { reportKind = kind; reportId = id; reportReason.text = ""; screen = "report" }
-  function afterMutation(message) { noticeMessage = message; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id})) }
+  function afterMutation(message) { noticeMessage = message; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id, reply_page: replyPage})) }
   function parseResult(text) {
     var result
     try { result = JSON.parse(String(text || "{}")) } catch (e) { errorMessage = "The server returned an unreadable response."; screen = handle ? "threads" : "onboarding"; return }
@@ -120,14 +131,14 @@ Panel {
       }
       currentPage = result.page || 1; totalPages = result.pages || 1; handle = result.handle || handle; screen = "threads"
     } else if (pendingAction === "thread") {
-      var item = result.thread; var depths = ({}); var replies = item.replies || []
-      for (var j = 0; j < replies.length; ++j) { var parent = replies[j].parent_reply_id || 0; replies[j].depth = parent && depths[parent] !== undefined ? Math.min(depths[parent] + 1, 4) : 0; depths[replies[j].id] = replies[j].depth }
-      item.replies = replies; currentThread = item; clearReplyTarget(); screen = "thread"
+      var item = result.thread; var replies = item.replies || []
+      for (var j = 0; j < replies.length; ++j) replies[j].depth = replies[j].parent_reply_id ? 1 : 0
+      item.replies = replies; currentThread = item; replyPage = item.reply_page || 1; replyPages = item.reply_pages || 1; clearReplyTarget(); screen = "thread"; scroller.contentY = 0
       if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
-      replyBody.text = ""; afterMutation("Reply added")
+      replyBody.text = ""; noticeMessage = "Reply added"; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id, reply_page: result.reply_page || 0}))
     } else if (pendingAction === "edit") afterMutation("Changes saved")
     else if (pendingAction === "delete") {
       if (editorKind === "thread") { noticeMessage = "Post deleted"; currentPage = 1; refreshThreads() } else afterMutation("Reply deleted")
@@ -160,10 +171,26 @@ Panel {
   KeyboardPanel {
     id: panel; anchorItem: root.anchorItem; owner: root.barIdentity; bar: root.bar; open: root.opened; focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(520)); contentHeight: panel.fittedContentHeight(Math.min(content.implicitHeight, Style.space(700)))
-    PanelKeyCatcher {
-      id: keyCatcher; anchors.fill: parent
-      onCloseRequested: { if (root.screen !== "threads" && root.screen !== "onboarding") root.refreshThreads(); else root.close() }
-      onTabRequested: function(direction) { root.switchPanel(direction) }
+    FocusScope {
+      id: keyboardScope; anchors.fill:parent; focus:true
+      Keys.priority: Keys.AfterItem
+      Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_PageDown) { root.scrollBy(scroller.height * .8); event.accepted = true }
+        else if (event.key === Qt.Key_PageUp) { root.scrollBy(-scroller.height * .8); event.accepted = true }
+        else if (event.key === Qt.Key_Home) { scroller.contentY = 0; event.accepted = true }
+        else if (event.key === Qt.Key_End) { scroller.contentY = Math.max(0, scroller.contentHeight-scroller.height); event.accepted = true }
+      }
+      PanelKeyCatcher {
+        id: keyCatcher; anchors.fill: parent
+        blocked: handleField.activeFocus || searchField.activeFocus || subjectField.activeFocus || composeBody.activeFocus || replyBody.activeFocus || editTitle.activeFocus || editBody.activeFocus || reportReason.activeFocus || bioField.activeFocus || moderationHandle.activeFocus || suspensionHours.activeFocus
+        onMoveRequested: function(dx, dy) {
+          if (dy !== 0) root.scrollBy(dy * Style.space(56))
+          else if (root.screen === "thread" && dx < 0 && root.replyPage > 1) root.openThread(root.currentThread.id, root.replyPage-1)
+          else if (root.screen === "thread" && dx > 0 && root.replyPage < root.replyPages) root.openThread(root.currentThread.id, root.replyPage+1)
+        }
+        onCloseRequested: { if (root.screen !== "threads" && root.screen !== "onboarding") root.refreshThreads(); else root.close() }
+        onTabRequested: function(direction) { root.switchPanel(direction) }
+        onTextKey: function(t) { root.handleShortcut(t) }
       Flickable {
         id: scroller; anchors.fill: parent; clip: true; boundsBehavior: Flickable.StopAtBounds; contentWidth: width; contentHeight: content.implicitHeight
         Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
@@ -285,10 +312,15 @@ Panel {
               Button{visible:!!root.currentThread.can_moderate;text:root.currentThread.locked?"Unlock":"Lock";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="thread";root.run("moderation",JSON.stringify({action:"lock",thread_id:root.currentThread.id,enabled:!root.currentThread.locked}))}}
             }
             PanelSectionHeader{text:"REPLIES";foreground:root.foreground;fontFamily:root.panelFont}
+            Row { visible:root.replyPages>1;width:parent.width;spacing:Style.space(6)
+              Button{text:"Previous";bordered:true;foreground:root.foreground;enabled:root.replyPage>1;onClicked:root.openThread(root.currentThread.id,root.replyPage-1)}
+              Text{anchors.verticalCenter:parent.verticalCenter;textFormat:Text.PlainText;text:"Replies "+root.replyPage+" / "+root.replyPages;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+              Button{text:"Next";bordered:true;foreground:root.foreground;enabled:root.replyPage<root.replyPages;onClicked:root.openThread(root.currentThread.id,root.replyPage+1)}
+            }
             Repeater { model:root.currentThread.replies||[];delegate:Rectangle{
               required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
-                Row{spacing:Style.space(5);BbsChip{label:modelData.depth?"THREADED REPLY":"REPLY";highlighted:!!modelData.depth}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
+                Row{spacing:Style.space(5);BbsChip{label:modelData.parent_handle?"REPLY TO @"+modelData.parent_handle:"REPLY";highlighted:!!modelData.parent_reply_id}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
                 Text{width:parent.width;textFormat:Text.PlainText;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
                 PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
@@ -417,6 +449,7 @@ Panel {
             }
           }
         }
+      }
       }
     }
   }

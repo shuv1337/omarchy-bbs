@@ -243,8 +243,8 @@ def main() -> None:
         item = read_input()
         print(json.dumps(content_request("/api/threads", "threads", item)))
     elif args.command == "thread":
-        item = read_input(); thread_id = int(item.get("thread_id", 0))
-        print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id})))
+        item = read_input(); thread_id = int(item.get("thread_id", 0)); reply_page = int(item.get("reply_page", 0))
+        print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id, "reply_page": reply_page})))
     elif args.command == "create":
         item = read_input(); category = str(item.get("category", "general")).lower().strip(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
         digest = hashlib.sha256(f"{category}\0{title}\0{body}".encode()).hexdigest()
