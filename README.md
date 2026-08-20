@@ -20,7 +20,8 @@ is available, the panel offers Omarchy's standard plugin update action.
 The panel itself is bounded and keyboard-first. Arrow keys or `j`/`k` move the
 visible selection, Enter opens the selected post, and Page Up/Page Down plus
 Home/End provide direct scrolling. Left/right or `h`/`l` change post or reply
-pages. In a thread, Enter or `r` replies to the selected reply and `a` replies
+pages. Trackpad scrolling is accelerated while multiline editors retain their
+own scrolling. In a thread, Enter or `r` replies to the selected reply and `a` replies
 to the original post. The reply editor opens directly beneath its target, and
 children remain grouped below the correct parent across conversation pages.
 Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
