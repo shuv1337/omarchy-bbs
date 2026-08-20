@@ -39,6 +39,9 @@ def main() -> None:
     assert "Notifications: " in SOURCE and "cycleThreadNotifications" in SOURCE
     assert all(name in SOURCE for name in ["mentionToggle", "replyToggle", "newPostToggle", "desktopToggle"])
     assert "detachRequested" in SOURCE and "reattachRequested" in SOURCE
+    assert "component SelectableBody" in SOURCE
+    assert "selectByMouse: true" in SOURCE and "persistentSelection: true" in SOURCE
+    assert SOURCE.count("SelectableBody{") == 2, "post and reply bodies must be selectable"
     wrapper = (ROOT / "Panel.qml").read_text()
     widget = (ROOT / "BarWidget.qml").read_text()
     assert "BbsView" in wrapper and "KeyboardPanel" in wrapper

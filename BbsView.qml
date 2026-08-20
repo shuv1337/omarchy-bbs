@@ -123,6 +123,31 @@ Item {
     }
   }
 
+  component SelectableBody: Controls.TextArea {
+    readOnly: true
+    textFormat: TextEdit.PlainText
+    wrapMode: TextEdit.Wrap
+    selectByMouse: true
+    persistentSelection: true
+    activeFocusOnTab: false
+    padding: 0
+    color: root.foreground
+    selectionColor: root.accent
+    selectedTextColor: Color.background
+    font.family: root.panelFont
+    background: null
+    height: implicitHeight
+    Keys.onEscapePressed: {
+      deselect()
+      keyCatcher.forceActiveFocus()
+    }
+    Keys.onPressed: function(event) {
+      if (event.key === Qt.Key_Escape) return
+      if ((event.modifiers & Qt.ControlModifier) && event.key === Qt.Key_C) return
+      event.accepted = true
+    }
+  }
+
   function open() { refreshIdentity() }
   function openToThread(id) { if(bridge.running)queuedRequest=({action:"thread",input:JSON.stringify({thread_id:id,reply_page:0})});else openThread(id,0) }
   function openToReply(threadId, replyId) { var input=JSON.stringify({thread_id:threadId,reply_page:0,reply_id:replyId});if(bridge.running)queuedRequest=({action:"thread",input:input});else run("thread",input) }
@@ -461,7 +486,7 @@ Item {
                 Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
                 Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
                 PanelSeparator{width:parent.width}
-                Text{width:parent.width;textFormat:Text.PlainText;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+                SelectableBody{width:parent.width;text:root.currentThread.body||"";font.pixelSize:Style.font.body}
                 InlineReplyEditor{id:originalReplyEditor;active:root.replyComposerOpen&&root.replyTargetId===0&&(!root.currentThread.locked||!!root.currentThread.can_moderate);targetId:0;targetHandle:root.currentThread.handle||"";onCancelRequested:root.clearReplyTarget();onSubmitRequested:function(body){root.submitReply(body,0)}}
               }
             }
@@ -487,7 +512,7 @@ Item {
               Rectangle{visible:index===root.selectedReplyIndex;width:Style.space(3);height:parent.height-Style.space(10);anchors.left:parent.left;anchors.leftMargin:Style.space(3);anchors.verticalCenter:parent.verticalCenter;radius:width/2;color:root.accent}
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
                 Row{spacing:Style.space(5);BbsChip{label:modelData.parent_handle?"REPLY TO @"+modelData.parent_handle:"REPLY";highlighted:!!modelData.parent_reply_id}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
-                Text{width:parent.width;textFormat:Text.PlainText;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                SelectableBody{width:parent.width;text:modelData.body;font.pixelSize:Style.font.bodySmall}
                 PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
                   Button{visible:!modelData.deleted;text:(modelData.liked?"Hearted":"Heart")+" · "+(modelData.likes||0);iconText:"♥";bordered:false;active:!!modelData.liked;foreground:modelData.liked?root.accent:root.foreground;onClicked:root.run("like",JSON.stringify({kind:"reply",id:modelData.id,enabled:!modelData.liked}))}

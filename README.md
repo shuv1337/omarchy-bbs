@@ -29,6 +29,8 @@ pages. Trackpad scrolling is accelerated while multiline editors retain their
 own scrolling. In a thread, Enter or `r` replies to the selected reply and `a` replies
 to the original post. The reply editor opens directly beneath its target, and
 children remain grouped below the correct parent across conversation pages.
+Post and reply text is selectable with the mouse and copies with `Ctrl+C`;
+Escape returns keyboard focus to board navigation.
 Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and delete the selection;
 `t` cycles the current thread through Default, Watching, and Muted notification modes.
 `0` reselects the original post. Ctrl+Enter submits every editor and Escape
