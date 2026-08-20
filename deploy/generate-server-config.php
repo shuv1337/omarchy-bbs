@@ -8,7 +8,7 @@ if (PHP_SAPI !== 'cli') {
 
 $target = $argv[1] ?? null;
 if (!$target || !str_starts_with($target, '/home/')) {
-    fwrite(STDERR, "Usage: php install-config.php /home/USER/.config/omarchy-bbs.php\n");
+    fwrite(STDERR, "Usage: php generate-server-config.php /home/USER/.config/omarchy-bbs.php\n");
     exit(1);
 }
 
@@ -33,4 +33,4 @@ $content = "<?php\nreturn " . var_export($config, true) . ";\n";
 if (file_put_contents($target, $content, LOCK_EX) === false || !chmod($target, 0600)) {
     throw new RuntimeException("Could not write secure config");
 }
-fwrite(STDOUT, "Configuration installed.\n");
+fwrite(STDOUT, "Server configuration created.\n");
