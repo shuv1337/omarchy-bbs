@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons
 import qs.Ui
 
 BarWidget {
@@ -9,10 +10,11 @@ BarWidget {
   readonly property string launcherPath: Qt.resolvedUrl("bin/omarchy-bbs").toString().replace("file://", "")
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
+  property int unreadCount: 0
 
   function command(action) {
     if (!root.bar) return ""
-    return root.bar.shellQuote(root.launcherPath) + " " + action
+    return Util.shellQuote(root.launcherPath) + " " + action
   }
 
   function open() { if (panelLoader.item) panelLoader.item.open() }
@@ -20,6 +22,12 @@ BarWidget {
   function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
   function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch() }
   function launch(action) { if (root.bar) root.bar.run(root.command(action)) }
+  function refreshStatus() {
+    if (!statusProcess.running && root.launcherPath !== "") {
+      statusProcess.command = [root.launcherPath, "status", "--notify"]
+      statusProcess.running = true
+    }
+  }
   function injectPanel() {
     if (!panelLoader.item) return
     panelLoader.item.bar = root.bar
@@ -44,11 +52,24 @@ BarWidget {
   }
 
   Timer {
-    interval: 300000
+    interval: 60000
     repeat: true
     running: true
-    triggeredOnStart: false
-    onTriggered: root.launch("status --notify")
+    triggeredOnStart: true
+    onTriggered: root.refreshStatus()
+  }
+
+  Process {
+    id: statusProcess
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var result = JSON.parse(String(text || "{}"))
+          if (result.ok) root.unreadCount = Number(result.unread || 0)
+        } catch (e) {}
+      }
+    }
   }
 
   IpcHandler {
@@ -66,8 +87,8 @@ BarWidget {
     anchors.fill: parent
     bar: root.bar
     text: "\uf086"
-    tooltipText: "Open Omarchy BBS"
-    active: root.opened
+    tooltipText: root.unreadCount > 0 ? "Omarchy BBS · " + root.unreadCount + " unread" : "Open Omarchy BBS"
+    active: root.opened || root.unreadCount > 0
     onPressed: function(b) {
       root.toggle()
     }

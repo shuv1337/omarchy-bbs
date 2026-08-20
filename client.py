@@ -18,11 +18,13 @@ import time
 import urllib.error
 import urllib.request
 
-STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "omarchy-bbs"
+PLUGIN_DIR = Path(__file__).resolve().parent
+DEV_MODE = (PLUGIN_DIR / ".local-test-mode").exists()
+STATE_ROOT = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
+STATE_DIR = STATE_ROOT / ("omarchy-bbs-local" if DEV_MODE else "omarchy-bbs")
 CONFIG_FILE = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy-bbs/config.json"
 DEVICE_FILE = STATE_DIR / "device.json"
 STATUS_FILE = STATE_DIR / "status.json"
-PLUGIN_DIR = Path(__file__).resolve().parent
 
 
 def fail(message: str, code: int = 1) -> None:
@@ -46,6 +48,8 @@ def omarchy_version() -> str:
 
 
 def server_url() -> str:
+    if DEV_MODE:
+        return "http://127.0.0.1:8765"
     if value := os.environ.get("OMARCHY_BBS_URL"):
         return value.rstrip("/")
     try:
@@ -147,10 +151,19 @@ def signed_request(path: str, purpose: str, extra: dict | None = None) -> dict:
     return request_json(path, payload)
 
 
+def content_purpose(action: str, payload: dict) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    return f"{action}:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def content_request(path: str, action: str, payload: dict) -> dict:
+    return signed_request(path, content_purpose(action, payload), payload)
+
+
 def notify(title: str, message: str) -> None:
     try:
         subprocess.run(
-            ["omarchy", "notification", "send", "--exec", "omarchy-shell omarchy.bbs toggle", "-g", "", title, message],
+            ["omarchy", "notification", "send", "--exec", "omarchy shell omarchy.bbs open", "-g", "", title, message],
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
         )
     except (FileNotFoundError, subprocess.SubprocessError):
@@ -174,14 +187,26 @@ def status(should_notify: bool) -> None:
         return
     response = signed_request("/api/status", "status")
     try:
-        previous = json.loads(STATUS_FILE.read_text()).get("unread", 0)
+        previous_state = json.loads(STATUS_FILE.read_text())
     except (OSError, json.JSONDecodeError):
-        previous = 0
+        previous_state = {}
+    events = response.get("events", [])
+    had_event_baseline = "seen_event_ids" in previous_state
+    seen = set(previous_state.get("seen_event_ids", []))
+    new_events = [event for event in events if event.get("event_id") not in seen] if had_event_baseline else []
+    stored = dict(response)
+    stored["seen_event_ids"] = list(dict.fromkeys(
+        previous_state.get("seen_event_ids", []) + [event.get("event_id") for event in events if event.get("event_id")]
+    ))[-200:]
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATUS_FILE.write_text(json.dumps(response, indent=2) + "\n")
+    STATUS_FILE.write_text(json.dumps(stored, indent=2) + "\n")
     os.chmod(STATUS_FILE, 0o600)
-    if should_notify and response.get("unread", 0) > previous:
-        notify("Omarchy BBS", f"{response['unread']} new post{'s' if response['unread'] != 1 else ''}.")
+    if should_notify and new_events:
+        for event in new_events[:3]:
+            action = "mentioned you in" if event.get("kind") == "mention" else "replied to"
+            notify("Omarchy BBS", f"@{event.get('actor', 'someone')} {action} “{event.get('title', 'a post')}”.")
+        if len(new_events) > 3:
+            notify("Omarchy BBS", f"{len(new_events) - 3} more new replies or mentions.")
     print(json.dumps({"ok": True, "registered": True, **response}))
 
 
@@ -194,24 +219,40 @@ def main() -> None:
     sub.add_parser("thread")
     sub.add_parser("create")
     sub.add_parser("reply")
+    sub.add_parser("edit")
+    sub.add_parser("delete")
+    sub.add_parser("report")
+    sub.add_parser("profile")
+    sub.add_parser("preferences")
+    sub.add_parser("mentions")
+    sub.add_parser("moderation")
     status_parser = sub.add_parser("status")
     status_parser.add_argument("--notify", action="store_true")
     args = parser.parse_args()
     if args.command == "identity": identity()
     elif args.command == "register": register()
     elif args.command == "status": status(args.notify)
-    elif args.command == "threads": print(json.dumps(signed_request("/api/threads", "threads")))
+    elif args.command == "threads":
+        item = read_input()
+        print(json.dumps(content_request("/api/threads", "threads", item)))
     elif args.command == "thread":
         item = read_input(); thread_id = int(item.get("thread_id", 0))
-        print(json.dumps(signed_request("/api/thread", f"thread:{thread_id}", {"thread_id": thread_id})))
+        print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id})))
     elif args.command == "create":
         item = read_input(); category = str(item.get("category", "general")).lower().strip(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
         digest = hashlib.sha256(f"{category}\0{title}\0{body}".encode()).hexdigest()
-        print(json.dumps(signed_request("/api/create", f"create:{digest}", {"category": category, "title": title, "body": body})))
+        payload = {"category": category, "title": title, "body": body}
+        print(json.dumps(content_request("/api/create", "create", payload)))
     elif args.command == "reply":
         item = read_input(); thread_id = int(item.get("thread_id", 0)); parent_id = int(item.get("parent_reply_id", 0)); body = str(item.get("body", "")).strip()
-        digest = hashlib.sha256(body.encode()).hexdigest()
-        print(json.dumps(signed_request("/api/reply", f"reply:{thread_id}:{parent_id}:{digest}", {"thread_id": thread_id, "parent_reply_id": parent_id, "body": body})))
+        payload = {"thread_id": thread_id, "parent_reply_id": parent_id, "body": body}
+        print(json.dumps(content_request("/api/reply", "reply", payload)))
+    elif args.command in {"edit", "delete", "report", "profile", "preferences", "moderation"}:
+        item = read_input()
+        print(json.dumps(content_request(f"/api/{args.command}", args.command, item)))
+    elif args.command == "mentions":
+        item = read_input()
+        print(json.dumps(content_request("/api/mentions", "mentions", item)))
 
 
 if __name__ == "__main__":

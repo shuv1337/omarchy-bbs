@@ -15,16 +15,29 @@ Panel {
   property string launcherPath: ""
   property string screen: "loading"
   property string handle: ""
+  property string role: "member"
   property string errorMessage: ""
-  property var currentThread: ({})
-  property string categoryFilter: "all"
-  property string composeCategory: "general"
-  property int replyTargetId: 0
-  property string replyTargetHandle: ""
-  property var boardCategories: ["general", "projects", "help", "showcase", "meta"]
+  property string noticeMessage: ""
   property string pendingAction: ""
   property string pendingInput: ""
   property var queuedRequest: null
+  property var currentThread: ({})
+  property var currentProfile: ({})
+  property var preferences: ({bio: "", mention_notifications: true})
+  property var boardCategories: ["general", "projects", "help", "showcase", "meta"]
+  property string categoryFilter: "all"
+  property string composeCategory: "general"
+  property int currentPage: 1
+  property int totalPages: 1
+  property int replyTargetId: 0
+  property string replyTargetHandle: ""
+  property string editorKind: ""
+  property int editorId: 0
+  property string reportKind: ""
+  property int reportId: 0
+  property string returnScreen: "threads"
+  property string moderationReturn: "thread"
+  property string moderatorCategory: "general"
   readonly property var barIdentity: hostWidget || root
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color accent: Color.accent
@@ -32,286 +45,317 @@ Panel {
 
   function open() { root.controller.show(); refreshIdentity() }
   function close() { root.controller.hide() }
-  function toggle() { if (root.opened) root.close(); else root.open() }
-  function switchPanel(direction) {
-    if (root.bar && typeof root.bar.switchPanelFrom === "function")
-      return root.bar.switchPanelFrom(root.barIdentity, direction)
-    return false
-  }
+  function toggle() { root.opened ? root.close() : root.open() }
+  function switchPanel(direction) { return root.bar && root.bar.switchPanelFrom ? root.bar.switchPanelFrom(root.barIdentity, direction) : false }
   function run(action, input) {
     if (bridge.running || launcherPath === "") return
-    errorMessage = ""
-    pendingAction = action
-    pendingInput = input || ""
-    bridge.command = [launcherPath, action]
-    bridge.running = true
+    errorMessage = ""; noticeMessage = ""; pendingAction = action; pendingInput = input || ""
+    bridge.command = [launcherPath, action]; bridge.running = true
   }
-  function refreshIdentity() { screen = "loading"; run("identity", "") }
-  function refreshThreads() { screen = "loading"; run("threads", "") }
-  function openThread(id) { screen = "loading"; run("thread", JSON.stringify({thread_id: id})) }
-  function selectReplyTarget(id, handle) {
-    replyTargetId = id
-    replyTargetHandle = handle
-    replyBody.forceActiveFocus()
-  }
-  function clearReplyTarget() { replyTargetId = 0; replyTargetHandle = "" }
   function continueWith(action, input) {
     if (bridge.running) queuedRequest = ({action: action, input: input || ""})
     else run(action, input || "")
   }
-  function diagnostic() {
-    return {
-      controllerOpen: root.controller.open,
-      windowOpen: panel.open,
-      windowVisible: panel.visible,
-      screenWidth: panel.screenW,
-      screenHeight: panel.screenH,
-      anchorWidth: panel.anchorW,
-      anchorHeight: panel.anchorH,
-      contentWidth: panel.contentWidth,
-      contentHeight: panel.contentHeight,
-      uiScreen: root.screen,
-      bridgeRunning: bridge.running,
-      error: root.errorMessage
-    }
+  function refreshIdentity() { screen = "loading"; run("identity", "") }
+  function refreshThreads() { screen = "loading"; run("threads", JSON.stringify({query: searchField.text, category: categoryFilter, page: currentPage})) }
+  function openThread(id) { screen = "loading"; run("thread", JSON.stringify({thread_id: id})) }
+  function loadProfile(name) { screen = "loading"; run("profile", JSON.stringify({handle: name || handle})) }
+  function loadPreferences() { screen = "loading"; run("preferences", JSON.stringify({action: "get"})) }
+  function loadMentions(markRead) { screen = "loading"; run("mentions", JSON.stringify({page: 1, mark_read: !!markRead})) }
+  function loadReports() { screen = "loading"; run("moderation", JSON.stringify({action: "list_reports"})) }
+  function selectReplyTarget(id, name) { replyTargetId = id; replyTargetHandle = name; replyBody.forceActiveFocus() }
+  function clearReplyTarget() { replyTargetId = 0; replyTargetHandle = "" }
+  function prepareEdit(kind, item) {
+    editorKind = kind; editorId = item.id; returnScreen = kind === "thread" ? "thread" : "thread"
+    editTitle.text = kind === "thread" ? item.title : ""
+    editBody.text = item.body || ""
+    editCategory = item.category || currentThread.category || "general"
+    screen = "edit"
   }
+  property string editCategory: "general"
+  function prepareReport(kind, id) { reportKind = kind; reportId = id; reportReason.text = ""; screen = "report" }
+  function afterMutation(message) { noticeMessage = message; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id})) }
   function parseResult(text) {
     var result
-    try { result = JSON.parse(String(text || "{}")) }
-    catch (e) { errorMessage = "The server returned an unreadable response."; return }
+    try { result = JSON.parse(String(text || "{}")) } catch (e) { errorMessage = "The server returned an unreadable response."; screen = handle ? "threads" : "onboarding"; return }
     if (!result.ok) { errorMessage = result.error || "The request failed."; if (screen === "loading") screen = handle ? "threads" : "onboarding"; return }
     if (pendingAction === "identity") {
-      if (result.registered) { handle = result.handle; screen = "loading"; continueWith("threads", "") }
+      if (result.registered) { handle = result.handle; screen = "loading"; continueWith("threads", JSON.stringify({query: "", category: "all", page: 1})) }
       else { handleField.text = result.suggested_handle; screen = "onboarding" }
     } else if (pendingAction === "register") {
-      handle = result.handle; screen = "loading"; continueWith("threads", "")
+      handle = result.handle; screen = "loading"; continueWith("threads", JSON.stringify({query: "", category: "all", page: 1}))
     } else if (pendingAction === "threads") {
-      threadModel.clear()
-      boardCategories = result.categories || boardCategories
+      threadModel.clear(); boardCategories = result.categories || boardCategories; role = result.role || role
       var rows = result.threads || []
-      for (var i = 0; i < rows.length; ++i) threadModel.append(rows[i])
-      handle = result.handle || handle; screen = "threads"
-    } else if (pendingAction === "thread") {
-      var item = result.thread
-      var depths = ({})
-      var replies = item.replies || []
-      for (var j = 0; j < replies.length; ++j) {
-        var parent = replies[j].parent_reply_id || 0
-        replies[j].depth = parent && depths[parent] !== undefined ? Math.min(depths[parent] + 1, 4) : 0
-        depths[replies[j].id] = replies[j].depth
+      for (var i = 0; i < rows.length; ++i) {
+        var row = rows[i]
+        if (row.pinned === undefined) row.pinned = false
+        if (row.locked === undefined) row.locked = false
+        if (row.unread === undefined) row.unread = false
+        threadModel.append(row)
       }
-      item.replies = replies
-      currentThread = item; clearReplyTarget(); screen = "thread"
+      currentPage = result.page || 1; totalPages = result.pages || 1; handle = result.handle || handle; screen = "threads"
+    } else if (pendingAction === "thread") {
+      var item = result.thread; var depths = ({}); var replies = item.replies || []
+      for (var j = 0; j < replies.length; ++j) { var parent = replies[j].parent_reply_id || 0; replies[j].depth = parent && depths[parent] !== undefined ? Math.min(depths[parent] + 1, 4) : 0; depths[replies[j].id] = replies[j].depth }
+      item.replies = replies; currentThread = item; clearReplyTarget(); screen = "thread"
+      if (hostWidget && hostWidget.refreshStatus) hostWidget.refreshStatus()
     } else if (pendingAction === "create") {
       subjectField.text = ""; composeBody.text = ""; screen = "loading"; continueWith("thread", JSON.stringify({thread_id: result.thread_id}))
     } else if (pendingAction === "reply") {
-      replyBody.text = ""; clearReplyTarget(); screen = "loading"; continueWith("thread", JSON.stringify({thread_id: currentThread.id}))
+      replyBody.text = ""; afterMutation("Reply added")
+    } else if (pendingAction === "edit") afterMutation("Changes saved")
+    else if (pendingAction === "delete") {
+      if (editorKind === "thread") { noticeMessage = "Post deleted"; currentPage = 1; refreshThreads() } else afterMutation("Reply deleted")
+    } else if (pendingAction === "report") afterMutation("Report submitted")
+    else if (pendingAction === "profile") { currentProfile = result.profile; screen = "profile" }
+    else if (pendingAction === "preferences") { preferences = result.preferences; bioField.text = preferences.bio || ""; mentionToggle.checked = !!preferences.mention_notifications; screen = "preferences" }
+    else if (pendingAction === "mentions") { mentionModel.clear(); rows = result.mentions || []; for (i=0;i<rows.length;++i) mentionModel.append(rows[i]); screen = "mentions" }
+    else if (pendingAction === "moderation") {
+      if (result.reports !== undefined) { reportModel.clear(); rows=result.reports||[];for(i=0;i<rows.length;++i)reportModel.append(rows[i]);screen="moderation" }
+      else if (moderationReturn === "moderation") { noticeMessage = "Moderation action applied"; screen = "loading"; continueWith("moderation", JSON.stringify({action:"list_reports"})) }
+      else afterMutation("Moderation action applied")
     }
   }
 
   ListModel { id: threadModel }
+  ListModel { id: mentionModel }
+  ListModel { id: reportModel }
 
   Process {
-    id: bridge
-    stdinEnabled: true
+    id: bridge; stdinEnabled: true
     onStarted: { if (root.pendingInput !== "") write(root.pendingInput + "\n") }
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.parseResult(text) }
     stderr: StdioCollector { waitForEnd: true }
     onExited: function(code) {
       if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS client could not complete the request."
-      if (root.queuedRequest) {
-        var next = root.queuedRequest
-        root.queuedRequest = null
-        Qt.callLater(function() { root.run(next.action, next.input) })
-      }
+      if (root.queuedRequest) { var next=root.queuedRequest;root.queuedRequest=null;Qt.callLater(function(){root.run(next.action,next.input)}) }
     }
   }
 
   KeyboardPanel {
-    id: panel
-    anchorItem: root.anchorItem
-    owner: root.barIdentity
-    bar: root.bar
-    open: root.opened
-    focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(470))
-    contentHeight: panel.fittedContentHeight(Math.min(content.implicitHeight, Style.space(650)))
-
+    id: panel; anchorItem: root.anchorItem; owner: root.barIdentity; bar: root.bar; open: root.opened; focusTarget: keyCatcher
+    contentWidth: panel.fittedContentWidth(Style.space(520)); contentHeight: panel.fittedContentHeight(Math.min(content.implicitHeight, Style.space(700)))
     PanelKeyCatcher {
-      id: keyCatcher
-      anchors.fill: parent
-      onCloseRequested: { if (root.screen === "thread" || root.screen === "compose") root.refreshThreads(); else root.close() }
+      id: keyCatcher; anchors.fill: parent
+      onCloseRequested: { if (root.screen !== "threads" && root.screen !== "onboarding") root.refreshThreads(); else root.close() }
       onTabRequested: function(direction) { root.switchPanel(direction) }
-      onTextKey: function(text) {
-        if ((text === "r" || text === "R") && root.screen === "threads") root.refreshThreads()
-        else if ((text === "n" || text === "N") && root.screen === "threads") root.screen = "compose"
-      }
-
       Flickable {
-        id: scroller
-        anchors.fill: parent
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-        contentWidth: width
-        contentHeight: content.implicitHeight
+        id: scroller; anchors.fill: parent; clip: true; boundsBehavior: Flickable.StopAtBounds; contentWidth: width; contentHeight: content.implicitHeight
         Controls.ScrollBar.vertical: Controls.ScrollBar { policy: Controls.ScrollBar.AsNeeded }
-
         Column {
-          id: content
-          width: scroller.width - (scroller.contentHeight > scroller.height ? Style.space(8) : 0)
-          spacing: Style.space(9)
-
-        PanelHero {
-          width: parent.width
-          title: "OMARCHY // BBS"
-          meta: root.handle ? "@" + root.handle : "COMMUNITY BOARD"
-          detail: root.screen === "onboarding" ? "JOIN" : "ENCRYPTED"
-          foreground: root.foreground
-          fontFamily: root.panelFont
-          iconComponent: Component {
-            Item {
-              implicitWidth: Style.space(42); implicitHeight: Style.space(42)
-              Text { anchors.centerIn: parent; text: "\uf086"; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.display }
-              Rectangle { width: Style.space(6); height: width; radius: width / 2; color: root.accent; anchors.right: parent.right; anchors.bottom: parent.bottom }
+          id: content; width: scroller.width - (scroller.contentHeight > scroller.height ? Style.space(8) : 0); spacing: Style.space(8)
+          PanelHero {
+            width: parent.width; title: "OMARCHY // BBS"; meta: root.handle ? "@" + root.handle : "COMMUNITY BOARD"; detail: root.role === "admin" ? "ADMIN" : "ENCRYPTED"; foreground: root.foreground; fontFamily: root.panelFont
+            iconComponent: Component {
+              Item {
+                implicitWidth: Style.space(42); implicitHeight: Style.space(42)
+                Text { anchors.centerIn:parent; text:"\uf086"; color:root.accent; font.family:root.panelFont; font.pixelSize:Style.font.display }
+                Rectangle { width:Style.space(6); height:width; radius:width/2; color:root.accent; anchors.right:parent.right; anchors.bottom:parent.bottom }
+              }
             }
           }
-        }
+          PanelSeparator { width: parent.width }
+          Text { visible: root.errorMessage!=="";width:parent.width;text:"! "+root.errorMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap }
+          Text { visible: root.noticeMessage!=="";width:parent.width;text:root.noticeMessage;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall }
+          Text { visible: root.screen==="loading";width:parent.width;text:"LOADING…";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;horizontalAlignment:Text.AlignHCenter }
 
-        PanelSeparator { width: parent.width }
-
-        Text {
-          visible: root.errorMessage !== ""
-          width: parent.width
-          text: "! " + root.errorMessage
-          color: root.accent
-          font.family: root.panelFont
-          font.pixelSize: Style.font.bodySmall
-          wrapMode: Text.WordWrap
-        }
-
-        Text {
-          visible: root.screen === "loading"
-          width: parent.width; text: "LOADING…"; color: root.foreground
-          font.family: root.panelFont; font.pixelSize: Style.font.body; horizontalAlignment: Text.AlignHCenter
-        }
-
-        Column {
-          visible: root.screen === "onboarding"
-          width: parent.width; spacing: Style.space(10)
-          PanelSectionHeader { text: "CHOOSE YOUR USERNAME"; foreground: root.foreground; fontFamily: root.panelFont }
-          Text { width: parent.width; text: "Your hostname is suggested. Change it now if you want—this public username appears on your posts."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
-          TextField { id: handleField; width: parent.width; foreground: root.foreground; placeholderText: "hostname"; maximumLength: 32; onAccepted: joinButton.clicked() }
-          Button { id: joinButton; width: parent.width; text: bridge.running ? "Joining…" : "Join board"; iconText: "\uf086"; leftAlign: true; bordered: true; focusable: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("register", JSON.stringify({handle: handleField.text})) }
-          Text { width: parent.width; text: "Registration requires the installed Omarchy client. Your device credential stays on this machine."; color: Qt.darker(root.foreground, 1.5); font.family: root.panelFont; font.pixelSize: Style.font.caption; wrapMode: Text.WordWrap }
-        }
-
-        Column {
-          visible: root.screen === "threads"
-          width: parent.width; spacing: Style.space(7)
-          Row { width: parent.width; spacing: Style.space(7)
-            Button { width: (parent.width - parent.spacing) * .62; text: "New post"; iconText: "\uf1d8"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.screen = "compose" }
-            Button { width: (parent.width - parent.spacing) * .38; text: "Refresh"; iconText: "\uf021"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
+          Column {
+            visible: root.screen==="onboarding";width:parent.width;spacing:Style.space(10)
+            PanelSectionHeader{text:"CHOOSE YOUR USERNAME";foreground:root.foreground;fontFamily:root.panelFont}
+            Text{width:parent.width;text:"Your hostname is suggested. This public username appears on your posts.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+            TextField{id:handleField;width:parent.width;foreground:root.foreground;maximumLength:32;onAccepted:joinButton.clicked()}
+            Button{id:joinButton;width:parent.width;text:bridge.running?"Joining…":"Join board";iconText:"\uf086";leftAlign:true;bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("register",JSON.stringify({handle:handleField.text}))}
           }
-          PanelSectionHeader { text: "CATEGORIES"; foreground: root.foreground; fontFamily: root.panelFont }
-          Flow {
-            width: parent.width; spacing: Style.space(5)
+
+          Column {
+            visible: root.screen==="threads";width:parent.width;spacing:Style.space(7)
+            Row { width:parent.width;spacing:Style.space(6)
+              Button{width:(parent.width-parent.spacing)*.55;text:"New post";iconText:"\uf1d8";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.screen="compose"}
+              Button{width:(parent.width-parent.spacing)*.45;text:"Profile";iconText:"\uf2bd";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.loadProfile(root.handle)}
+            }
+            Row { width:parent.width;spacing:Style.space(6)
+              TextField{id:searchField;width:parent.width-Style.space(106);foreground:root.foreground;placeholderText:"Search posts";onAccepted:{root.currentPage=1;root.refreshThreads()}}
+              Button{width:Style.space(100);text:"Search";iconText:"\uf002";bordered:true;foreground:root.foreground;onClicked:{root.currentPage=1;root.refreshThreads()}}
+            }
+            Flow { width:parent.width;spacing:Style.space(5)
+              Repeater { model:["all"].concat(root.boardCategories);delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.categoryFilter===modelData;onClicked:{root.categoryFilter=modelData;root.currentPage=1;root.refreshThreads()}} }
+            }
+            Row { width:parent.width;spacing:Style.space(6)
+              Button{text:"Mentions";iconText:"@";bordered:true;foreground:root.foreground;onClicked:root.loadMentions(true)}
+              Button{visible:root.role==="admin";text:"Moderation";iconText:"\uf3ed";bordered:true;foreground:root.foreground;onClicked:root.loadReports()}
+              Button{text:"Refresh";iconText:"\uf021";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            }
+            Text{visible:threadModel.count===0;width:parent.width;text:"NO POSTS FOUND.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Repeater { model:threadModel;delegate:Button{
+              required property int id;required property string category;required property string title;required property string handle;required property string created_at;required property int replies;required property bool pinned;required property bool locked;required property bool unread
+              width:parent.width;text:(pinned?"PINNED  ":"")+(unread?"NEW  ":"")+"["+category.toUpperCase()+"]  "+title+"\n@"+handle+"  ·  "+replies+" repl."+(locked?"  ·  LOCKED":"");iconText:unread?"\uf0e0":"\uf075";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(id)
+            }}
+            Row { visible:root.totalPages>1;spacing:Style.space(6)
+              Button{text:"Previous";bordered:true;foreground:root.foreground;enabled:root.currentPage>1;onClicked:{root.currentPage--;root.refreshThreads()}}
+              Text{anchors.verticalCenter:parent.verticalCenter;text:root.currentPage+" / "+root.totalPages;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+              Button{text:"Next";bordered:true;foreground:root.foreground;enabled:root.currentPage<root.totalPages;onClicked:{root.currentPage++;root.refreshThreads()}}
+            }
+          }
+
+          Column {
+            visible:root.screen==="compose";width:parent.width;spacing:Style.space(8)
+            PanelSectionHeader{text:"NEW POST";foreground:root.foreground;fontFamily:root.panelFont}
+            Flow{width:parent.width;spacing:Style.space(5);Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.composeCategory===modelData;onClicked:root.composeCategory=modelData}}}
+            TextField{id:subjectField;width:parent.width;foreground:root.foreground;placeholderText:"Subject";maximumLength:120}
+            Controls.TextArea{id:composeBody;width:parent.width;height:Style.space(150);placeholderText:"Write your post";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Row {
+              spacing:Style.space(6)
+              Button{text:"Post";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("create",JSON.stringify({category:root.composeCategory,title:subjectField.text,body:composeBody.text}))}
+              Button{text:"Cancel";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            }
+          }
+
+          Column {
+            visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
+            Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            Text{width:parent.width;text:(root.currentThread.pinned?"PINNED  ":"")+"["+String(root.currentThread.category||"general").toUpperCase()+"]"+(root.currentThread.locked?"  LOCKED":"");color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.caption}
+            Text{width:parent.width;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
+            Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
+            Text{width:parent.width;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+            Flow { width:parent.width;spacing:Style.space(5)
+              Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Edit";iconText:"\uf044";bordered:true;foreground:root.foreground;onClicked:root.prepareEdit("thread",root.currentThread)}
+              Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Delete";iconText:"\uf2ed";bordered:true;foreground:root.foreground;onClicked:{root.editorKind="thread";root.run("delete",JSON.stringify({kind:"thread",id:root.currentThread.id}))}}
+              Button{text:"Report";iconText:"\uf024";bordered:true;foreground:root.foreground;onClicked:root.prepareReport("thread",root.currentThread.id)}
+              Button{visible:!!root.currentThread.can_moderate;text:root.currentThread.pinned?"Unpin":"Pin";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="thread";root.run("moderation",JSON.stringify({action:"pin",thread_id:root.currentThread.id,enabled:!root.currentThread.pinned}))}}
+              Button{visible:!!root.currentThread.can_moderate;text:root.currentThread.locked?"Unlock":"Lock";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="thread";root.run("moderation",JSON.stringify({action:"lock",thread_id:root.currentThread.id,enabled:!root.currentThread.locked}))}}
+            }
+            Repeater { model:root.currentThread.replies||[];delegate:Rectangle{
+              required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.05);radius:Style.cornerRadius
+              Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
+                Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)}
+                Text{width:parent.width;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                Flow{width:parent.width;spacing:Style.space(4)
+                  Button{visible:!modelData.deleted;text:"Reply";iconText:"\uf3e5";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle)}
+                  Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Edit";bordered:false;foreground:root.foreground;onClicked:root.prepareEdit("reply",modelData)}
+                  Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Delete";bordered:false;foreground:root.foreground;onClicked:{root.editorKind="reply";root.run("delete",JSON.stringify({kind:"reply",id:modelData.id}))}}
+                  Button{visible:!modelData.deleted;text:"Report";bordered:false;foreground:root.foreground;onClicked:root.prepareReport("reply",modelData.id)}
+                }
+              }
+            }}
+            Row {
+              visible:root.replyTargetId>0; spacing:Style.space(6)
+              Text{anchors.verticalCenter:parent.verticalCenter;text:"Replying to @"+root.replyTargetHandle;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+              Button{text:"Cancel";bordered:false;foreground:root.foreground;onClicked:root.clearReplyTarget()}
+            }
+            Controls.TextArea{id:replyBody;visible:!root.currentThread.locked||!!root.currentThread.can_moderate;width:parent.width;height:Style.space(90);placeholderText:root.replyTargetId?"Write a threaded reply":"Write a reply";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Button{visible:replyBody.visible;text:"Reply";iconText:"\uf1d8";bordered:true;foreground:root.foreground;enabled:!bridge.running;onClicked:root.run("reply",JSON.stringify({thread_id:root.currentThread.id,parent_reply_id:root.replyTargetId,body:replyBody.text}))}
+          }
+
+          Column {
+            visible:root.screen==="edit";width:parent.width;spacing:Style.space(8)
+            PanelSectionHeader{text:"EDIT "+root.editorKind.toUpperCase();foreground:root.foreground;fontFamily:root.panelFont}
+            Flow{visible:root.editorKind==="thread";width:parent.width;spacing:Style.space(5);Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.editCategory===modelData;onClicked:root.editCategory=modelData}}}
+            TextField{id:editTitle;visible:root.editorKind==="thread";width:parent.width;foreground:root.foreground;maximumLength:120}
+            Controls.TextArea{id:editBody;width:parent.width;height:Style.space(160);wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Row {
+              spacing:Style.space(6)
+              Button{text:"Save";bordered:true;foreground:root.foreground;onClicked:{var p={kind:root.editorKind,id:root.editorId,body:editBody.text};if(root.editorKind==="thread"){p.title=editTitle.text;p.category=root.editCategory}root.run("edit",JSON.stringify(p))}}
+              Button{text:"Cancel";bordered:true;foreground:root.foreground;onClicked:root.screen="thread"}
+            }
+          }
+
+          Column {
+            visible:root.screen==="report";width:parent.width;spacing:Style.space(8)
+            PanelSectionHeader{text:"REPORT CONTENT";foreground:root.foreground;fontFamily:root.panelFont}
+            Text{width:parent.width;text:"Explain what should be reviewed by a moderator.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+            Controls.TextArea{id:reportReason;width:parent.width;height:Style.space(120);placeholderText:"Reason";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Row {
+              spacing:Style.space(6)
+              Button{text:"Submit report";bordered:true;foreground:root.foreground;onClicked:root.run("report",JSON.stringify({kind:root.reportKind,id:root.reportId,reason:reportReason.text}))}
+              Button{text:"Cancel";bordered:true;foreground:root.foreground;onClicked:root.screen="thread"}
+            }
+          }
+
+          Column {
+            visible:root.screen==="profile";width:parent.width;spacing:Style.space(8)
+            Button{text:"Back";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            PanelSectionHeader{text:"@"+(root.currentProfile.handle||"");foreground:root.foreground;fontFamily:root.panelFont}
+            Text{width:parent.width;text:(root.currentProfile.role||"member").toUpperCase()+"  ·  joined "+(root.currentProfile.joined_at||"");color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.caption;wrapMode:Text.WordWrap}
+            Text{width:parent.width;text:root.currentProfile.bio||"No bio yet.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+            Text{width:parent.width;text:(root.currentProfile.posts||0)+" posts  ·  "+(root.currentProfile.replies||0)+" replies";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Button{visible:!!root.currentProfile.mine;text:"Edit profile & notifications";iconText:"\uf013";bordered:true;foreground:root.foreground;onClicked:root.loadPreferences()}
+            Repeater{model:root.currentProfile.activity||[];delegate:Button{required property var modelData;width:parent.width;text:modelData.kind.toUpperCase()+"  ·  "+modelData.created_at;leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(modelData.thread_id)}}
+          }
+
+          Column {
+            visible:root.screen==="preferences";width:parent.width;spacing:Style.space(8)
+            PanelSectionHeader{text:"PROFILE & NOTIFICATIONS";foreground:root.foreground;fontFamily:root.panelFont}
+            Controls.TextArea{id:bioField;width:parent.width;height:Style.space(110);placeholderText:"Short bio";wrapMode:TextEdit.Wrap;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;background:Rectangle{color:Color.background;border.color:Qt.darker(root.foreground,1.8);radius:Style.cornerRadius}}
+            Controls.CheckBox{id:mentionToggle;text:"Notify me about @mentions";font.family:root.panelFont;palette.windowText:root.foreground}
+            Row {
+              spacing:Style.space(6)
+              Button{text:"Save";bordered:true;foreground:root.foreground;onClicked:root.run("preferences",JSON.stringify({action:"set",bio:bioField.text,mention_notifications:mentionToggle.checked}))}
+              Button{text:"Cancel";bordered:true;foreground:root.foreground;onClicked:root.loadProfile(root.handle)}
+            }
+          }
+
+          Column {
+            visible:root.screen==="mentions";width:parent.width;spacing:Style.space(7)
+            Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            PanelSectionHeader{text:"MENTIONS";foreground:root.foreground;fontFamily:root.panelFont}
+            Text{visible:mentionModel.count===0;text:"No mentions.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+            Repeater{model:mentionModel;delegate:Button{required property int thread_id;required property string actor;required property string created_at;width:parent.width;text:"@"+actor+" mentioned you  ·  "+created_at;iconText:"@";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(thread_id)}}
+          }
+
+          Column {
+            visible:root.screen==="moderation";width:parent.width;spacing:Style.space(7)
+            Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
+            PanelSectionHeader{text:"USER MODERATION";foreground:root.foreground;fontFamily:root.panelFont}
+            TextField{id:moderationHandle;width:parent.width;foreground:root.foreground;placeholderText:"Username";maximumLength:32}
+            Flow {
+              width:parent.width;spacing:Style.space(5)
+              Repeater{model:root.boardCategories;delegate:Button{required property string modelData;text:modelData.toUpperCase();bordered:true;foreground:root.foreground;active:root.moderatorCategory===modelData;onClicked:root.moderatorCategory=modelData}}
+            }
+            Row {
+              spacing:Style.space(5)
+              Button{text:"Make category mod";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="moderation";root.run("moderation",JSON.stringify({action:"category_moderator",handle:moderationHandle.text,category:root.moderatorCategory,enabled:true}))}}
+              Button{text:"Remove category mod";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="moderation";root.run("moderation",JSON.stringify({action:"category_moderator",handle:moderationHandle.text,category:root.moderatorCategory,enabled:false}))}}
+            }
+            Row {
+              spacing:Style.space(5)
+              TextField{id:suspensionHours;width:Style.space(110);foreground:root.foreground;placeholderText:"Hours";inputMethodHints:Qt.ImhDigitsOnly}
+              Button{text:"Suspend";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="moderation";root.run("moderation",JSON.stringify({action:"suspend",handle:moderationHandle.text,hours:Number(suspensionHours.text)}))}}
+              Button{text:"Unsuspend";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="moderation";root.run("moderation",JSON.stringify({action:"suspend",handle:moderationHandle.text,hours:0}))}}
+            }
+            PanelSeparator{width:parent.width}
+            PanelSectionHeader{text:"OPEN REPORTS";foreground:root.foreground;fontFamily:root.panelFont}
+            Text{visible:reportModel.count===0;text:"No open reports.";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
             Repeater {
-              model: ["all"].concat(root.boardCategories)
-              delegate: Button { required property string modelData; text: modelData.toUpperCase(); bordered: true; foreground: root.foreground; active: root.categoryFilter === modelData; onClicked: root.categoryFilter = modelData }
-            }
-          }
-          Text { visible: threadModel.count === 0; width: parent.width; text: "NO POSTS YET."; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
-          Repeater {
-            model: threadModel
-            delegate: Button {
-              required property int id; required property string category; required property string title; required property string handle; required property string created_at; required property int replies
-              visible: root.categoryFilter === "all" || root.categoryFilter === category
-              width: parent.width; text: "[" + category.toUpperCase() + "]  " + title + "\n@" + handle + "  ·  " + replies + " repl.  ·  " + created_at; iconText: "\uf075"; leftAlign: true; bordered: true; foreground: root.foreground; onClicked: root.openThread(id)
-            }
-          }
-          Text { width: parent.width; text: "N  NEW    R  REFRESH    ESC  CLOSE"; color: Qt.darker(root.foreground, 1.5); font.family: root.panelFont; font.pixelSize: Style.font.caption }
-        }
-
-        Column {
-          visible: root.screen === "compose"
-          width: parent.width; spacing: Style.space(8)
-          PanelSectionHeader { text: "NEW POST"; foreground: root.foreground; fontFamily: root.panelFont }
-          Text { width: parent.width; text: "CATEGORY"; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.caption }
-          Flow {
-            width: parent.width; spacing: Style.space(5)
-            Repeater { model: root.boardCategories; delegate: Button { required property string modelData; text: modelData.toUpperCase(); bordered: true; foreground: root.foreground; active: root.composeCategory === modelData; onClicked: root.composeCategory = modelData } }
-          }
-          TextField { id: subjectField; width: parent.width; foreground: root.foreground; placeholderText: "Subject"; maximumLength: 120 }
-          Controls.TextArea { id: composeBody; width: parent.width; height: Style.space(150); placeholderText: "Write something worth reading."; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
-          Row { spacing: Style.space(7)
-            Button { text: "Post"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("create", JSON.stringify({category: root.composeCategory, title: subjectField.text, body: composeBody.text})) }
-            Button { text: "Cancel"; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
-          }
-        }
-
-        Column {
-          visible: root.screen === "thread"
-          width: parent.width; spacing: Style.space(8)
-          Button { text: "Back to posts"; iconText: "\uf060"; bordered: true; foreground: root.foreground; onClicked: root.refreshThreads() }
-          Text { width: parent.width; text: "[" + String(root.currentThread.category || "general").toUpperCase() + "]"; color: Qt.darker(root.foreground, 1.35); font.family: root.panelFont; font.pixelSize: Style.font.caption }
-          Text { width: parent.width; text: root.currentThread.title || ""; color: root.accent; font.family: root.panelFont; font.pixelSize: Style.font.heading; font.bold: true; wrapMode: Text.WordWrap }
-          Text { width: parent.width; text: "@" + (root.currentThread.handle || "") + "  ·  " + (root.currentThread.created_at || ""); color: Qt.darker(root.foreground, 1.4); font.family: root.panelFont; font.pixelSize: Style.font.caption }
-          Text { width: parent.width; text: root.currentThread.body || ""; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; wrapMode: Text.WordWrap }
-          Repeater {
-            model: root.currentThread.replies || []
-            delegate: Rectangle {
-              required property var modelData
-              x: (modelData.depth || 0) * Style.space(16)
-              width: parent.width - x
-              implicitHeight: replyColumn.implicitHeight + Style.space(14)
-              color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, .05)
-              radius: Style.cornerRadius
-              Column {
-                id: replyColumn
-                anchors.fill: parent
-                anchors.margins: Style.space(7)
-                spacing: Style.space(4)
-                Text {
-                  width: parent.width
-                  text: "@" + modelData.handle + "  ·  " + modelData.created_at
-                  color: Qt.darker(root.foreground, 1.4)
-                  font.family: root.panelFont
-                  font.pixelSize: Style.font.caption
-                }
-                Text {
-                  width: parent.width
-                  text: modelData.body
-                  color: root.foreground
-                  font.family: root.panelFont
-                  font.pixelSize: Style.font.bodySmall
-                  wrapMode: Text.WordWrap
-                }
-                Button {
-                  text: "Reply to @" + modelData.handle
-                  iconText: "\uf3e5"
-                  bordered: false
-                  foreground: root.foreground
-                  onClicked: root.selectReplyTarget(modelData.id, modelData.handle)
+              model:reportModel
+              delegate:Rectangle {
+                required property int id
+                required property string target_kind
+                required property int target_id
+                required property string reporter
+                required property string reason
+                required property int thread_id
+                width:parent.width
+                implicitHeight:reportColumn.implicitHeight+Style.space(14)
+                color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.05)
+                radius:Style.cornerRadius
+                Column {
+                  id:reportColumn
+                  anchors.fill:parent
+                  anchors.margins:Style.space(7)
+                  spacing:Style.space(5)
+                  Text{width:parent.width;text:target_kind.toUpperCase()+" #"+target_id+" reported by @"+reporter;color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
+                  Text{width:parent.width;text:reason;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                  Row {
+                    spacing:Style.space(5)
+                    Button{text:"Open";bordered:true;foreground:root.foreground;enabled:thread_id>0;onClicked:root.openThread(thread_id)}
+                    Button{text:"Resolve";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="moderation";root.run("moderation",JSON.stringify({action:"resolve_report",report_id:id}))}}
+                  }
                 }
               }
             }
           }
-          Row {
-            visible: root.replyTargetId > 0
-            spacing: Style.space(6)
-            Text {
-              anchors.verticalCenter: parent.verticalCenter
-              text: "Replying to @" + root.replyTargetHandle
-              color: root.accent
-              font.family: root.panelFont
-              font.pixelSize: Style.font.bodySmall
-            }
-            Button { text: "Cancel"; bordered: false; foreground: root.foreground; onClicked: root.clearReplyTarget() }
-          }
-          Controls.TextArea { id: replyBody; width: parent.width; height: Style.space(90); placeholderText: root.replyTargetId > 0 ? "Write a threaded reply" : "Write a reply"; wrapMode: TextEdit.Wrap; color: root.foreground; font.family: root.panelFont; font.pixelSize: Style.font.body; background: Rectangle { color: Color.background; border.color: Qt.darker(root.foreground, 1.8); radius: Style.cornerRadius } }
-          Button { text: "Reply"; iconText: "\uf1d8"; bordered: true; foreground: root.foreground; enabled: !bridge.running; onClicked: root.run("reply", JSON.stringify({thread_id: root.currentThread.id, parent_reply_id: root.replyTargetId, body: replyBody.text})) }
         }
-      }
       }
     }
   }

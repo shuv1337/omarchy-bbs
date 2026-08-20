@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+test_dir="$plugin_dir/.local-test"
+config_file="$test_dir/server-config.php"
+mkdir -p "$test_dir"
+
+if [[ ! -f "$config_file" ]]; then
+  app_key="$(php -r 'echo bin2hex(random_bytes(32));')"
+  umask 077
+  printf '%s\n' '<?php return [' \
+    "  'driver' => 'sqlite'," \
+    "  'db_path' => __DIR__.'/bbs.sqlite'," \
+    "  'app_key' => '$app_key'," \
+    "  'admin_handles' => ['thoughtlesslabs']," \
+    '];' > "$config_file"
+fi
+
+export OMARCHY_BBS_CONFIG="$config_file"
+exec php -S 127.0.0.1:8765 "$plugin_dir/web/index.php"

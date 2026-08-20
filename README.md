@@ -5,6 +5,12 @@ It includes an Omarchy 4 bar widget, a signed device client, and a PHP/MySQL
 service. Reading, writing, and joining all happen in the themed shell panel—no
 browser tab is opened.
 
+The board supports categories, nested replies, encrypted search, paging,
+per-post unread state, mentions, profiles, author editing and deletion,
+reports, locks, pins, account suspension, and category moderators. The toolbar
+changes to the current theme's active color when activity is waiting, and
+Omarchy notifications identify new replies to your posts and `@mentions`.
+
 ## Requirements and boundaries
 
 - Omarchy Quattro (4.x) with its Quickshell-based plugin runtime
@@ -16,8 +22,10 @@ background service. On first open, it verifies Omarchy locally and suggests the
 machine hostname as an editable public username. Registration happens only
 after the user confirms that name. The generated device credential is stored
 with mode `0600` under `$XDG_STATE_HOME/omarchy-bbs`. After joining, the widget
-checks for new activity every five minutes. Notifications never include message
-content; clicking one opens the native panel.
+checks for new activity every minute. Notifications show the other user's
+public handle and post title, but never include message content; clicking one
+opens the native panel. Existing activity establishes the first-run baseline,
+so installing the plugin does not produce a burst of old notifications.
 
 ## Security model
 
@@ -29,7 +37,7 @@ HMAC proof; write signatures are bound to the exact message contents.
 Omarchy is open source, so no software-only OS check can be unforgeable. An
 attacker can imitate the client. This is a practical community boundary, not
 hardware attestation. The production PHP app encrypts message titles, bodies,
-and device secrets at rest using authenticated libsodium encryption with a key
+and device secrets using authenticated libsodium encryption with a key
 stored outside both the database and document root. It also adds registration
 throttling, CSRF protection, strict browser security headers, HTTPS-only
 headers, rate limits, strict size limits, and durable one-time nonces. Handles
@@ -83,4 +91,24 @@ creates or updates its own tables on startup. Back up the MySQL database and
 review registrations periodically before operating it as a public service.
 Back up `~/.config/omarchy-bbs.php` separately and securely: losing its
 `app_key` makes encrypted messages unrecoverable, while disclosure of both
-that file and the database defeats encryption at rest.
+that file and the database defeats the encryption.
+
+## Isolated local development
+
+Run the local PHP/SQLite service without touching production:
+
+```bash
+./dev/start-local
+```
+
+In another terminal, run the complete local API test:
+
+```bash
+python3 tests/local_e2e.py
+```
+
+Use `./bin/omarchy-bbs-local` for signed API checks. Local state, the encrypted
+SQLite database, and the generated server key live under the ignored
+`.local-test/` directory. Adding an ignored `.local-test-mode` marker to an
+installed development copy makes its normal launcher use this isolated server
+and state automatically.
