@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +68,19 @@ def main() -> None:
             else:
                 raise AssertionError("local server did not start")
 
+            wrong_type = urllib.request.Request(url + "/api/register", data=b"{}", headers={"Content-Type": "text/plain"}, method="POST")
+            try:
+                urllib.request.urlopen(wrong_type, timeout=2)
+                raise AssertionError("non-JSON request was accepted")
+            except urllib.error.HTTPError as error:
+                assert error.code == 415
+            oversized = urllib.request.Request(url + "/api/register", data=b"{" + b" " * 65536 + b"}", headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                urllib.request.urlopen(oversized, timeout=2)
+                raise AssertionError("oversized request was accepted")
+            except urllib.error.HTTPError as error:
+                assert error.code == 413
+
             admin, member, third, duplicate = temp / "admin", temp / "member", temp / "third", temp / "duplicate"
             assert call("register", {"handle": "test-admin"}, admin, url)["handle"] == "test-admin"
             assert call("register", {"handle": "test-member"}, member, url)["handle"] == "test-member"
@@ -99,6 +113,9 @@ def main() -> None:
             assert len(second_page["threads"]) == 2
             listing = call("threads", {"category": "projects", "query": "encrypted", "page": 1}, member, url)
             assert listing["threads"][0]["unread"] is True
+            injected_search = call("threads", {"category": "all", "query": "%' OR 1=1 --", "page": 1}, member, url)
+            assert injected_search["total"] == 0
+            assert "not found" in call("profile", {"handle": "test-admin' OR 1=1 --"}, member, url, ok=False)["error"].lower()
             assert call("thread", {"thread_id": thread_id}, member, url)["thread"]["mine"] is False
             assert call("threads", {"category": "projects", "query": "", "page": 1}, member, url)["threads"][0]["unread"] is False
 

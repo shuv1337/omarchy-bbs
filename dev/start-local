@@ -13,7 +13,6 @@ if [[ ! -f "$config_file" ]]; then
     "  'driver' => 'sqlite'," \
     "  'db_path' => __DIR__.'/bbs.sqlite'," \
     "  'app_key' => '$app_key'," \
-    "  'admin_handles' => ['thoughtlesslabs']," \
     '];' > "$config_file"
 fi
 

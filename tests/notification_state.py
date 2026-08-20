@@ -59,6 +59,8 @@ def main() -> None:
         ):
             poll(response("mention:1"), notifications)
             assert notifications == [], "the initial baseline must not alert for old events"
+            persisted = (state / "status.json").read_text()
+            assert "Hello" not in persisted and "alice" not in persisted, "notification metadata must not persist"
 
             poll(response("mention:2", "mention:1"), notifications)
             assert len(notifications) == 1 and "@alice mentioned you" in notifications[0][1]

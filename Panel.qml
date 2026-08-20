@@ -43,6 +43,29 @@ Panel {
   readonly property color accent: Color.accent
   readonly property string panelFont: bar ? bar.fontFamily : Style.font.family
 
+  component BbsChip: Rectangle {
+    property string label: ""
+    property color chipForeground: Color.foreground
+    property color chipAccent: Color.accent
+    property string chipFont: Style.font.family
+    property bool highlighted: false
+    implicitWidth: chipText.implicitWidth + Style.space(12)
+    implicitHeight: chipText.implicitHeight + Style.space(5)
+    radius: implicitHeight / 2
+    color: highlighted ? Qt.rgba(chipAccent.r, chipAccent.g, chipAccent.b, .16) : Qt.rgba(chipForeground.r, chipForeground.g, chipForeground.b, .07)
+    border.width: 1
+    border.color: highlighted ? Qt.rgba(chipAccent.r, chipAccent.g, chipAccent.b, .55) : Qt.rgba(chipForeground.r, chipForeground.g, chipForeground.b, .14)
+    Text {
+      id: chipText
+      anchors.centerIn: parent
+      text: label
+      color: highlighted ? chipAccent : chipForeground
+      font.family: chipFont
+      font.pixelSize: Style.font.caption
+      font.bold: highlighted
+    }
+  }
+
   function open() { root.controller.show(); refreshIdentity() }
   function close() { root.controller.hide() }
   function toggle() { root.opened ? root.close() : root.open() }
@@ -170,6 +193,7 @@ Panel {
 
           Column {
             visible: root.screen==="threads";width:parent.width;spacing:Style.space(7)
+            PanelSectionHeader{text:"FIND POSTS";foreground:root.foreground;fontFamily:root.panelFont}
             Row { width:parent.width;spacing:Style.space(6)
               Button{width:(parent.width-parent.spacing)*.55;text:"New post";iconText:"\uf1d8";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.screen="compose"}
               Button{width:(parent.width-parent.spacing)*.45;text:"Profile";iconText:"\uf2bd";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.loadProfile(root.handle)}
@@ -186,10 +210,29 @@ Panel {
               Button{visible:root.role==="admin";text:"Moderation";iconText:"\uf3ed";bordered:true;foreground:root.foreground;onClicked:root.loadReports()}
               Button{text:"Refresh";iconText:"\uf021";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
             }
+            PanelSectionHeader{text:"POSTS";foreground:root.foreground;fontFamily:root.panelFont}
             Text{visible:threadModel.count===0;width:parent.width;text:"NO POSTS FOUND.";color:Qt.darker(root.foreground,1.35);font.family:root.panelFont;font.pixelSize:Style.font.bodySmall}
-            Repeater { model:threadModel;delegate:Button{
+            Repeater { model:threadModel;delegate:Rectangle{
               required property int id;required property string category;required property string title;required property string handle;required property string created_at;required property int replies;required property bool pinned;required property bool locked;required property bool unread
-              width:parent.width;text:(pinned?"PINNED  ":"")+(unread?"NEW  ":"")+"["+category.toUpperCase()+"]  "+title+"\n@"+handle+"  ·  "+replies+" repl."+(locked?"  ·  LOCKED":"");iconText:unread?"\uf0e0":"\uf075";leftAlign:true;bordered:true;foreground:root.foreground;onClicked:root.openThread(id)
+              width:parent.width
+              implicitHeight:postCardColumn.implicitHeight+Style.space(16)
+              radius:Style.cornerRadius
+              color:postMouse.containsMouse?Style.hoverFillFor(root.foreground,root.accent):(unread?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.10):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.04))
+              border.width:1
+              border.color:(unread||pinned)?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.55):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.12)
+              Column {
+                id:postCardColumn;anchors.fill:parent;anchors.margins:Style.space(8);spacing:Style.space(5)
+                Flow {
+                  width:parent.width;spacing:Style.space(4)
+                  BbsChip{label:category.toUpperCase();highlighted:true}
+                  BbsChip{visible:unread;label:"NEW";highlighted:true}
+                  BbsChip{visible:pinned;label:"PINNED"}
+                  BbsChip{visible:locked;label:"LOCKED"}
+                }
+                Text{width:parent.width;text:title;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;font.bold:true;wrapMode:Text.WordWrap}
+                Text{width:parent.width;text:"@"+handle+"  ·  "+replies+" repl.  ·  "+created_at;color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
+              }
+              MouseArea{id:postMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor;onClicked:root.openThread(id)}
             }}
             Row { visible:root.totalPages>1;spacing:Style.space(6)
               Button{text:"Previous";bordered:true;foreground:root.foreground;enabled:root.currentPage>1;onClicked:{root.currentPage--;root.refreshThreads()}}
@@ -214,10 +257,25 @@ Panel {
           Column {
             visible:root.screen==="thread";width:parent.width;spacing:Style.space(8)
             Button{text:"Back to posts";iconText:"\uf060";bordered:true;foreground:root.foreground;onClicked:root.refreshThreads()}
-            Text{width:parent.width;text:(root.currentThread.pinned?"PINNED  ":"")+"["+String(root.currentThread.category||"general").toUpperCase()+"]"+(root.currentThread.locked?"  LOCKED":"");color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.caption}
-            Text{width:parent.width;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
-            Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
-            Text{width:parent.width;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+            Rectangle {
+              width:parent.width;implicitHeight:threadCardColumn.implicitHeight+Style.space(18);radius:Style.cornerRadius
+              color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.04)
+              border.width:1;border.color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.13)
+              Column {
+                id:threadCardColumn;anchors.fill:parent;anchors.margins:Style.space(9);spacing:Style.space(6)
+                Flow {
+                  width:parent.width;spacing:Style.space(4)
+                  BbsChip{label:String(root.currentThread.category||"general").toUpperCase();highlighted:true}
+                  BbsChip{visible:!!root.currentThread.pinned;label:"PINNED"}
+                  BbsChip{visible:!!root.currentThread.locked;label:"LOCKED"}
+                }
+                Text{width:parent.width;text:root.currentThread.title||"";color:root.accent;font.family:root.panelFont;font.pixelSize:Style.font.heading;font.bold:true;wrapMode:Text.WordWrap}
+                Button{text:"@"+(root.currentThread.handle||"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(root.currentThread.handle)}
+                PanelSeparator{width:parent.width}
+                Text{width:parent.width;text:root.currentThread.body||"";color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;wrapMode:Text.WordWrap}
+              }
+            }
+            PanelSectionHeader{text:"POST OPTIONS";foreground:root.foreground;fontFamily:root.panelFont}
             Flow { width:parent.width;spacing:Style.space(5)
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Edit";iconText:"\uf044";bordered:true;foreground:root.foreground;onClicked:root.prepareEdit("thread",root.currentThread)}
               Button{visible:!!root.currentThread.mine||!!root.currentThread.can_moderate;text:"Delete";iconText:"\uf2ed";bordered:true;foreground:root.foreground;onClicked:{root.editorKind="thread";root.run("delete",JSON.stringify({kind:"thread",id:root.currentThread.id}))}}
@@ -225,11 +283,13 @@ Panel {
               Button{visible:!!root.currentThread.can_moderate;text:root.currentThread.pinned?"Unpin":"Pin";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="thread";root.run("moderation",JSON.stringify({action:"pin",thread_id:root.currentThread.id,enabled:!root.currentThread.pinned}))}}
               Button{visible:!!root.currentThread.can_moderate;text:root.currentThread.locked?"Unlock":"Lock";bordered:true;foreground:root.foreground;onClicked:{root.moderationReturn="thread";root.run("moderation",JSON.stringify({action:"lock",thread_id:root.currentThread.id,enabled:!root.currentThread.locked}))}}
             }
+            PanelSectionHeader{text:"REPLIES";foreground:root.foreground;fontFamily:root.panelFont}
             Repeater { model:root.currentThread.replies||[];delegate:Rectangle{
-              required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.05);radius:Style.cornerRadius
+              required property var modelData;x:(modelData.depth||0)*Style.space(16);width:parent.width-x;implicitHeight:replyColumn.implicitHeight+Style.space(14);color:Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.045);radius:Style.cornerRadius;border.width:1;border.color:modelData.depth?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.28):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.11)
               Column{id:replyColumn;anchors.fill:parent;anchors.margins:Style.space(7);spacing:Style.space(4)
-                Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)}
+                Row{spacing:Style.space(5);BbsChip{label:modelData.depth?"THREADED REPLY":"REPLY";highlighted:!!modelData.depth}Button{text:"@"+modelData.handle+(modelData.edited?"  ·  edited":"");bordered:false;foreground:root.foreground;onClicked:root.loadProfile(modelData.handle)} }
                 Text{width:parent.width;text:modelData.body;color:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.bodySmall;wrapMode:Text.WordWrap}
+                PanelSeparator{width:parent.width}
                 Flow{width:parent.width;spacing:Style.space(4)
                   Button{visible:!modelData.deleted;text:"Reply";iconText:"\uf3e5";bordered:false;foreground:root.foreground;onClicked:root.selectReplyTarget(modelData.id,modelData.handle)}
                   Button{visible:!modelData.deleted&&(modelData.mine||modelData.can_moderate);text:"Edit";bordered:false;foreground:root.foreground;onClicked:root.prepareEdit("reply",modelData)}

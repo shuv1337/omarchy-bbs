@@ -194,7 +194,11 @@ def status(should_notify: bool) -> None:
     had_event_baseline = "seen_event_ids" in previous_state
     seen = set(previous_state.get("seen_event_ids", []))
     new_events = [event for event in events if event.get("event_id") not in seen] if had_event_baseline else []
-    stored = dict(response)
+    stored = {
+        "unread": int(response.get("unread", 0)),
+        "mentions": int(response.get("mentions", 0)),
+        "unread_threads": int(response.get("unread_threads", 0)),
+    }
     stored["seen_event_ids"] = list(dict.fromkeys(
         previous_state.get("seen_event_ids", []) + [event.get("event_id") for event in events if event.get("event_id")]
     ))[-200:]
