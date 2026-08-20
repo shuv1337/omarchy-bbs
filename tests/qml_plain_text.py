@@ -55,6 +55,8 @@ def main() -> None:
     assert '"OMARCHY_BBS_PAYLOAD":pendingInput' in SOURCE
     assert "id:requestWatchdog" in SOURCE and "bridge.running=false" in SOURCE
     assert "stdinEnabled: true" not in SOURCE and "onStarted:" not in SOURCE
+    assert 'key === "r" && screen === "threads"' in SOURCE
+    assert 'run("mark-read"' in SOURCE and 'threadModel.setProperty(readIndex,"unread",false)' in SOURCE
     wrapper = (ROOT / "Panel.qml").read_text()
     widget = (ROOT / "BarWidget.qml").read_text()
     assert "BbsView" in wrapper and "KeyboardPanel" in wrapper
