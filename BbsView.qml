@@ -427,23 +427,28 @@ Item {
               width:parent.width
               implicitHeight:postCardColumn.implicitHeight+Style.space(16)
               radius:Style.cornerRadius
-              color:postMouse.containsMouse?Style.hoverFillFor(root.foreground,root.accent):(unread?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.10):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.04))
+              color:unread?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.10):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,postMouse.containsMouse?.075:.04)
               border.width:1
-              border.color:(unread||pinned)?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.55):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.12)
+              border.color:unread?Qt.rgba(root.accent.r,root.accent.g,root.accent.b,.55):Qt.rgba(root.foreground.r,root.foreground.g,root.foreground.b,.12)
               Rectangle{visible:index===root.selectedPostIndex;width:Style.space(3);height:parent.height-Style.space(12);anchors.left:parent.left;anchors.leftMargin:Style.space(3);anchors.verticalCenter:parent.verticalCenter;radius:width/2;color:root.accent}
               Column {
                 id:postCardColumn;anchors.fill:parent;anchors.margins:Style.space(8);spacing:Style.space(5)
                 Flow {
                   width:parent.width;spacing:Style.space(4)
-                  BbsChip{label:category.toUpperCase();highlighted:true}
+                  BbsChip{label:category.toUpperCase()}
                   BbsChip{visible:unread;label:"NEW";highlighted:true}
                   BbsChip{visible:pinned;label:"PINNED"}
                   BbsChip{visible:locked;label:"LOCKED"}
-                  BbsChip{visible:notification_mode==="watch";label:"WATCHING";highlighted:true}
+                  BbsChip{visible:notification_mode==="watch";label:"WATCHING"}
                   BbsChip{visible:notification_mode==="mute";label:"MUTED"}
                 }
                 Text{width:parent.width;textFormat:Text.PlainText;text:title;color:unread?root.accent:root.foreground;font.family:root.panelFont;font.pixelSize:Style.font.body;font.bold:true;wrapMode:Text.WordWrap}
-                Text{width:parent.width;textFormat:Text.PlainText;text:"@"+handle+"  ·  "+replies+" repl.  ·  ♥ "+likes+"  ·  "+created_at;color:liked?root.accent:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
+                Row {
+                  width: parent.width
+                  Text{id:postMetaPrefix;textFormat:Text.PlainText;text:"@"+handle+"  ·  "+replies+" repl.  ·  ";color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption}
+                  Text{id:postHeartMeta;textFormat:Text.PlainText;text:"♥ "+likes;color:liked?root.accent:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;font.bold:liked}
+                  Text{width:Math.max(0,parent.width-postMetaPrefix.width-postHeartMeta.width);textFormat:Text.PlainText;text:"  ·  "+created_at;color:Color.muted;font.family:root.panelFont;font.pixelSize:Style.font.caption;elide:Text.ElideRight}
+                }
               }
               MouseArea{id:postMouse;anchors.fill:parent;hoverEnabled:true;cursorShape:Qt.PointingHandCursor;onClicked:root.openThread(id)}
             }}

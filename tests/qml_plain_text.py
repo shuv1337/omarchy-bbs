@@ -42,6 +42,11 @@ def main() -> None:
     assert "component SelectableBody" in SOURCE
     assert "selectByMouse: true" in SOURCE and "persistentSelection: true" in SOURCE
     assert SOURCE.count("SelectableBody{") == 2, "post and reply bodies must be selectable"
+    assert "border.color:unread?" in SOURCE and "border.color:(unread||pinned)" not in SOURCE
+    assert 'BbsChip{label:category.toUpperCase()}' in SOURCE
+    assert 'BbsChip{label:category.toUpperCase();highlighted:true}' not in SOURCE
+    assert 'id:postHeartMeta' in SOURCE and 'color:liked?root.accent:Color.muted' in SOURCE
+    assert 'color:postMouse.containsMouse?Style.hoverFillFor' not in SOURCE
     wrapper = (ROOT / "Panel.qml").read_text()
     widget = (ROOT / "BarWidget.qml").read_text()
     assert "BbsView" in wrapper and "KeyboardPanel" in wrapper

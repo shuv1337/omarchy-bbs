@@ -37,6 +37,10 @@ Shift+`h` hearts the selected post or reply. `e`, `f`, and `x` edit, report, and
 cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
 for mentions, `p` for profile, `R` to refresh, and `b` to return to the list.
 The panel shows the active selection and an on-screen shortcut summary.
+In the post list, blue card fill, border, title, and the `NEW` badge exclusively
+mean unread activity. Keyboard selection uses only the left accent rail;
+categories, pins, and notification-mode badges stay neutral. When you have
+hearted a post, only its heart and count use the accent color.
 
 ## Screenshots
 
