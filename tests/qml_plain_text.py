@@ -52,6 +52,9 @@ def main() -> None:
     assert "function moveThreadSelection" in SOURCE
     assert "selectedReplyIndex < 0 ? originalPostCard" in SOURCE
     assert "selectedReplyIndex >= rows.length-1" in SOURCE
+    assert '"OMARCHY_BBS_PAYLOAD":pendingInput' in SOURCE
+    assert "id:requestWatchdog" in SOURCE and "bridge.running=false" in SOURCE
+    assert "stdinEnabled: true" not in SOURCE and "onStarted:" not in SOURCE
     wrapper = (ROOT / "Panel.qml").read_text()
     widget = (ROOT / "BarWidget.qml").read_text()
     assert "BbsView" in wrapper and "KeyboardPanel" in wrapper

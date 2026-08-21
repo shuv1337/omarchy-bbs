@@ -63,8 +63,11 @@ def server_url() -> str:
 
 
 def read_input() -> dict:
+    raw = os.environ.pop("OMARCHY_BBS_PAYLOAD", None)
+    if raw is None:
+        raw = sys.stdin.readline()
     try:
-        value = json.loads(sys.stdin.readline())
+        value = json.loads(raw)
     except json.JSONDecodeError:
         fail("Invalid request data")
     if not isinstance(value, dict):

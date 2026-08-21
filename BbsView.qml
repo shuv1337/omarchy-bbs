@@ -23,6 +23,7 @@ Item {
   property string noticeMessage: ""
   property string pendingAction: ""
   property string pendingInput: ""
+  property bool requestTimedOut: false
   property var queuedRequest: null
   property var currentThread: ({})
   property var currentProfile: ({})
@@ -245,7 +246,8 @@ Item {
   }
   function run(action, input) {
     if (bridge.running || launcherPath === "") return
-    errorMessage = ""; noticeMessage = ""; pendingAction = action; pendingInput = input || ""
+    errorMessage = ""; noticeMessage = ""; pendingAction = action; pendingInput = input || "";requestTimedOut=false
+    bridge.environment = pendingInput !== "" ? ({"OMARCHY_BBS_PAYLOAD":pendingInput}) : ({})
     bridge.command = [launcherPath, action]; bridge.running = true
   }
   function continueWith(action, input) {
@@ -332,12 +334,23 @@ Item {
   ListModel { id: mentionModel }
   ListModel { id: reportModel }
 
+  Timer {
+    id:requestWatchdog;interval:20000;repeat:false;running:bridge.running
+    onTriggered: {
+      root.requestTimedOut=true;root.queuedRequest=null
+      root.errorMessage="The BBS request timed out. Try again."
+      root.screen=root.handle?"threads":"onboarding"
+      bridge.running=false
+      Qt.callLater(function(){keyCatcher.forceActiveFocus()})
+    }
+  }
+
   Process {
-    id: bridge; stdinEnabled: true
-    onStarted: { if (root.pendingInput !== "") write(root.pendingInput + "\n") }
+    id: bridge
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.parseResult(text) }
     stderr: StdioCollector { waitForEnd: true }
     onExited: function(code) {
+      if (root.requestTimedOut) { root.requestTimedOut=false;return }
       if (code !== 0 && root.errorMessage === "") root.errorMessage = "The BBS client could not complete the request."
       if (root.queuedRequest) { var next=root.queuedRequest;root.queuedRequest=null;Qt.callLater(function(){root.run(next.action,next.input)}) }
     }

@@ -18,11 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 CLIENT = ROOT / "client.py"
 
 
-def call(command: str, payload: dict | None, state: Path, url: str, ok: bool = True) -> dict:
+def call(command: str, payload: dict | None, state: Path, url: str, ok: bool = True, environment_payload: bool = False) -> dict:
     env = os.environ | {"XDG_STATE_HOME": str(state), "OMARCHY_BBS_URL": url}
+    if payload is not None and environment_payload:
+        env["OMARCHY_BBS_PAYLOAD"] = json.dumps(payload)
     result = subprocess.run(
         ["python3", str(CLIENT), command],
-        input=(json.dumps(payload) + "\n") if payload is not None else None,
+        input=(json.dumps(payload) + "\n") if payload is not None and not environment_payload else None,
         text=True,
         capture_output=True,
         env=env,
@@ -115,6 +117,7 @@ def main() -> None:
             assert len(second_page["threads"]) == 2
             listing = call("threads", {"category": "projects", "query": "encrypted", "page": 1}, member, url)
             assert listing["threads"][0]["unread"] is True
+            assert call("threads", {"category": "projects", "query": "encrypted", "page": 1}, member, url, environment_payload=True)["threads"][0]["id"] == thread_id
             injected_search = call("threads", {"category": "all", "query": "%' OR 1=1 --", "page": 1}, member, url)
             assert injected_search["total"] == 0
             assert "not found" in call("profile", {"handle": "test-admin' OR 1=1 --"}, member, url, ok=False)["error"].lower()
