@@ -38,6 +38,8 @@ cancels it. Global shortcuts include `n` for a new post, `s` for search, `m`
 for mentions, `p` for profile, `r` to mark the selected list post read,
 `Shift+R` to refresh, and `b` to return to the list.
 The panel shows the active selection and an on-screen shortcut summary.
+Client requests keep message content out of command-line arguments, and a watchdog returns
+the panel to a usable screen if a client process stalls.
 In the post list, blue card fill, border, title, and the `NEW` badge exclusively
 mean unread activity. Keyboard selection uses only the left accent rail;
 categories, pins, and notification-mode badges stay neutral. When you have

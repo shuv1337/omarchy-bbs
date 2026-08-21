@@ -308,8 +308,7 @@ def main() -> None:
         print(json.dumps(content_request("/api/thread", "thread", {"thread_id": thread_id, "reply_page": reply_page, "reply_id": reply_id})))
     elif args.command == "mark-read":
         item = read_input(); thread_id = int(item.get("thread_id", 0))
-        response = content_request("/api/thread", "thread", {"thread_id": thread_id, "reply_page": 0, "reply_id": 0})
-        print(json.dumps({"ok": bool(response.get("ok")), "thread_id": thread_id}))
+        print(json.dumps(content_request("/api/mark-read", "mark-read", {"thread_id": thread_id})))
     elif args.command == "create":
         item = read_input(); category = str(item.get("category", "general")).lower().strip(); title = str(item.get("title", "")).strip(); body = str(item.get("body", "")).strip()
         digest = hashlib.sha256(f"{category}\0{title}\0{body}".encode()).hexdigest()
